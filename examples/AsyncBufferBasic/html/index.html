@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#000000"/>
   <title>AsyncBufferBasic</title>
-  <script src="js/app.js"></script>
   <script src="js/vanjs.js"></script> <!-- amazing and compact UI Framework -->
+  <script src="js/app.js"></script>
   <link rel="icon" type="image/x-icon" href="img/favicon.png">
   <link rel="shortcut icon" href="img/favicon.png">
   <link rel="apple-touch-icon" href="img/favicon.png">
@@ -14,7 +14,6 @@
   <!-- 
   Use base tag for local development update the ip to your ESP32
 
-  <base href="http://192.168.0.60/" />
   
   All  relative requests after this point will prepend the base href.
 
@@ -22,6 +21,7 @@
   server.disableCORS(); // useful for local development
   -->
 
+  <base href="http://192.168.0.60/" />
   <script src="js/models.js"></script> <!-- GENERATED SCRIPT -->
 
   <style>
@@ -31,6 +31,12 @@
       --padding: 24px;
       --margin: 24px;
     }
+
+    .dark {
+      --main-bg-color: #111;
+      --main-text-color: #fff;
+    }
+
     body,
     html {
       margin: 0;
@@ -47,8 +53,21 @@
       padding: var(--padding);
       border-radius: var(--padding);
     }
+    section {
+      margin-top: calc(var(--padding) / 2);
+      padding-top: calc(var(--padding) / 2);
+      padding-bottom: calc(var(--padding) / 2);
+    }
     img {
       vertical-align: top;
+    }
+    .response {
+      margin-left: calc(var(--padding) * -1);
+      margin-right: calc(var(--padding) * -1);
+      border-radius: 0;
+    }
+    .line:hover {
+      background-color: #88888822;
     }
   </style>
 </head>

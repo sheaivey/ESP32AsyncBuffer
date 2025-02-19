@@ -96,6 +96,7 @@ class AsyncWebServerBufferAPI {
         }
       }
       const response = await fetch(`${this.baseUrl}${url}`, _options);
+      response.request = { method, url, type, data, options };
       if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
       let output = null;
       if(response.headers.get("Content-Type") === 'application/octet-stream') {
@@ -106,10 +107,12 @@ class AsyncWebServerBufferAPI {
           // TODO: could automatically retry until success or n number of failed attempts.
           throw new Error('Checksum failed!');
         }
+        response.bodyRaw = buffer;
         output = this.decode(response.headers.get(this.#typeHeader), buffer);
       }
       else {
         output = await response.text();
+        response.bodyRaw = output;
       }
       if(this.enableDebug) {
         console.log(`${_options.method}: ${this.baseUrl}${url}`, _options, output);
@@ -176,6 +179,18 @@ class AsyncWebServerBufferAPI {
   //   return out;
   // }
 
+  getEmpty(type) {
+    const typeInfo = this.getType(type);
+    if(typeInfo.primitive) {
+      return this.#decodeClientType(type, 0);
+    }
+    let fields = typeInfo.fields;
+    let obj = {};
+    for(const { type, name } in fields) {
+      obj[name] = this.getEmpty(type);
+    };
+    return obj;
+  }
 
   // unpack an ArrayBuffer back into structured data
   decode(type, buffer) {
@@ -185,8 +200,6 @@ class AsyncWebServerBufferAPI {
     }
     let fields = [];
     if(typeInfo.primitive) {
-      const test = new ArrayBuffer();
-      test.byteLength
       // primitive data type
       fields = [{ type, name: 'value'}];
       if(buffer.byteLength > typeInfo.size) {

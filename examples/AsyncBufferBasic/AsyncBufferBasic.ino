@@ -58,7 +58,7 @@ void setup() {
     // GET index of intArray
     server.on("/api/intArray/*", HTTP_GET, [](AsyncWebServerRequest *request) { 
       const char type[] = "int";
-      int index = request->url().substring(15).toInt();
+      int index = request->url().substring(14).toInt();
       if(index < 0 || index >= sizeof(test_int_array) / sizeof(test_int_array[0])) {
         notFound(request);
         return;
@@ -68,7 +68,7 @@ void setup() {
     // POST index of intArray
     server.on("/api/intArray/*", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, [](AsyncWebServerRequest *request, uint8_t *requestData, size_t requestSize, size_t requestIndex, size_t requestTotal) { 
       const char type[] = "int";
-      int index = request->url().substring(15).toInt(); 
+      int index = request->url().substring(14).toInt(); 
       if(index < 0 || index >= sizeof(test_int_array) / sizeof(test_int_array[0])) {
         notFound(request);
         return;
