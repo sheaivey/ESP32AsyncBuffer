@@ -9,6 +9,9 @@ const UglifyJS = requireWithInstall('uglify-es').minify;
 const mime = requireWithInstall('mime-types');
 
 async function makeUgly(filePath, byteBuffer) {
+  // TODO: Minify HTML, JS, CSS is still not working, consider using Rollup for this task.
+  // rollup could allow for inline includes to reduce requests.
+
   var uglifyEsOptions = { parse: { bare_returns: false }, sourceMap: false };
   switch(path.extname(filePath)) {
     case ".js": {
@@ -46,6 +49,7 @@ function roundTo(number, decimals = 1) {
 
 
 async function packContents(filePath, fileContents, options = {gzip: false, minify: false}) {
+  const fileName = path.basename(filePath).replace(/([^A-Za-z0-9]+)/i,"_").toUpperCase();
   if(typeof fileContents == "string") {
     fileContents = Buffer.from(fileContents, "utf-8"); // convert to byteArray
   }
@@ -55,22 +59,24 @@ async function packContents(filePath, fileContents, options = {gzip: false, mini
   else {
     byteBuffer = fileContents;
   }
-  let contents = "";
-  const fileName = path.basename(filePath).replace(/([^A-Za-z0-9]+)/i,"_").toUpperCase();
+  if(options.gzip === true) {
+    byteBuffer = zlib.gzipSync(fileContents);
+  }
+  let savings = `(was ${roundTo(fileContents.length/1024)}kb saved ${roundTo((fileContents.length - byteBuffer.length)/1024)}kb or ${roundTo((1 - (byteBuffer.length/fileContents.length)) * 100)}% reduction)`;
+  if(byteBuffer.length > fileContents.length) {
+    // original file was better :(
+    byteBuffer = fileContents;
+    savings = "";
+  }
+  consoleOut.queue(`INFO: "${fileName}" - ${roundTo(byteBuffer.length/1024)}kb ${savings}`);
 
   const etag = new Date().getTime().toString().slice(-5);
   let output = `const char FILE_${fileName}_CONTENT_TYPE[] PROGMEM = "${mime.lookup(path.basename(filePath))}";\n`;
       output+= `const char FILE_${fileName}_ETAG[] PROGMEM = "${etag}";\n`;
       output+= `const bool FILE_${fileName}_GZIP = ${options.gzip ? "true" : "false"};\n`;
-  if(options.gzip === true) {
-    byteBuffer = zlib.gzipSync(fileContents)
-  }
-
   let hexArray = byteBuffer.toString("hex").match(/.{1,2}/g).join(", 0x");
   hexArray = `0x${hexArray}`;
-
   output += `const uint8_t FILE_${fileName}[] PROGMEM = { ${hexArray} };\n`;
-  consoleOut.queue(`INFO: "${fileName}" - ${roundTo(byteBuffer.length/1024)}kb (was ${roundTo(fileContents.length/1024)}kb saved ${roundTo((fileContents.length - byteBuffer.length)/1024)}kb or ${roundTo((1 - (byteBuffer.length/fileContents.length)) * 100)}% reduction)`);
 
   output += "\n";
   return [

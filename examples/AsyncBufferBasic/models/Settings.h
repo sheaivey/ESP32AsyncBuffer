@@ -64,5 +64,4 @@ struct AllTypes
   double _double;
 };
 
-
 #endif

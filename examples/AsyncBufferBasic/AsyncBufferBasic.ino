@@ -77,14 +77,13 @@ void setup() {
         server.sendResponseBuffer(request, type, (uint8_t *)&test_int_array[index], sizeof(test_int_array[index]));
       }
     });
+
     server.onBuffer("/api/intArray", "int", (uint8_t *)&test_int_array, sizeof(test_int_array));
-
     server.onBuffer("/api/Settings", "Settings", (uint8_t *)&settings, sizeof(settings));
-
     server.onBuffer("/api/AllTypes", "AllTypes", (uint8_t *)&allTypes, sizeof(allTypes));
 
     // CORS only needed for STA mode
-    // server.disableCORS();
+    // server.disableCORS(); // useful for local development
     server.onNotFound(notFound);
     server.begin();
 }

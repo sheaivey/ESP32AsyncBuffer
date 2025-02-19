@@ -1,17 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+<head>  
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Test</title>
-  <link rel="shortcut icon" type="image/x-icon" href="data:image/x-icon;,">
   <meta name="theme-color" content="#000000"/>
-  <script src="/js/models.js"></script>
+  <title>AsyncBufferBasic</title>
+  <script src="js/app.js"></script>
+  <script src="js/vanjs.js"></script> <!-- amazing and compact UI Framework -->
+  <link rel="icon" type="image/x-icon" href="img/favicon.png">
+  <link rel="shortcut icon" href="img/favicon.png">
+  <link rel="apple-touch-icon" href="img/favicon.png">
+
+  <!-- 
+  Use base tag for local development update the ip to your ESP32
+
+  <base href="http://192.168.0.60/" />
+  
+  All  relative requests after this point will prepend the base href.
+
+  You will also need to disable cores on your server for this to work.
+  server.disableCORS(); // useful for local development
+  -->
+
+  <script src="js/models.js"></script> <!-- GENERATED SCRIPT -->
+
   <style>
     :root {
-      --main-bg-color: #ffffff;
-      --main-text-color: #000000;
-      --max-section-width: 720px;
+      --main-bg-color: #fff;
+      --main-text-color: #000;
       --padding: 24px;
       --margin: 24px;
     }
@@ -19,83 +35,30 @@
     html {
       margin: 0;
       padding: var(--padding);
-      font-family: Arial, Helvetica, sans-serif;
+      font-family: 'Courier New', Courier, monospace;
       background-color: var(--main-bg-color);
       color: var(--main-text-color);
     }
     a, a:active, a:visited, a:hover {
       color: var(--main-text-color);
     }
-    p {
-      background-color: #f0f0f0;
+    p, section {
+      background-color: #88888822;
       padding: var(--padding);
-      font-family: 'Courier New', Courier, monospace;
+      border-radius: var(--padding);
+    }
+    img {
+      vertical-align: top;
     }
   </style>
 </head>
 
 <body>
-  
-  <h1><img src="favicon.png" /> Hello Buffer!</h1>
+  <h1><img src="img/favicon.png" /> Hello Buffer!</h1>
   <p>Open the developer tools to inspect the console and network.</p>
 
   <script>
-    // Setup the api
-    const api = new AsyncWebServerBufferAPI({
-      baseUrl: '/api', // prepend all api requests here
-      useChecksum: true, 
-      enableDebug: true // console log the network transactions
-    });
-
-    const main = async () => {
-      let data, settings, allTypes, res;
-      
-      // get AllTypes struct
-      [allTypes, res] = await api.get('/AllTypes', 'AllTypes');
-      // tweak the struct 
-      Object.keys(allTypes).forEach(key => {
-        allTypes[key] += typeof allTypes[key] == "bigint" ? 10n : 10;
-      });
-      // modify AllTypes
-      [data, res] = await api.post('/AllTypes', 'AllTypes', allTypes);
-
-      // get int
-      [data, res] = await api.get('/int', 'int');
-      // modify value
-      [data, res] = await api.post('/int', 'int', 65000);
-
-      // get value at index
-      [data, res] = await api.get('/intArray/9', 'int');
-      // modify value at index
-      [data, res] = await api.post('/intArray/4', 'int', 65000);
-
-      // get int array
-      [data, res] = await api.get('/intArray', 'int');
-
-      // modify post data
-      data = data.map((v, index) => {
-        return index;
-      });
-      // modify int array
-      [data, res] = await api.post('/intArray', 'int', data);
-
-      // get Settings struct
-      [settings, res] = await api.get('/Settings', 'Settings');
-
-      // tweak some Settings
-      settings.ssid = "newWiFi";
-      settings.password = "newPassword";
-      settings.colors.forEach(c => {
-        c.r = 255; // hot pink!
-        c.g = 25;
-        c.b = 127;
-      });
-      
-      // modify Settings struct
-      [settings, res] = await api.post('/Settings', 'Settings', settings);
-    };
-    main();
+    App(); // start the app! Have a look at "js/app.js"
   </script>
 </body>
-
 </html>

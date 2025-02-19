@@ -1,4 +1,4 @@
-# ESP32AsyncBuffer
+# <img src="examples/AsyncBufferBasic/html/img/favicon.png" width="32" height="32" alt="ESP32AsyncBuffer" style="vertical-align: top" /> ESP32AsyncBuffer
 
 This library provides solution to send or receive binary data structures to the client and with encoding and decoding helper functions so you can operate on the data easily.
 
@@ -13,7 +13,7 @@ The idea here is simple, let the client do all the heavy work of encoding and de
 - Transfer extremely large datasets
 - Minimal over the wire payload sizes (no JSON fluff, just bytes!)
 - Checksums
-- Under 2k for the client javascript code to encode and decode
+- `js/models.js` is 2.5kb for the client javascript code to encode and decode + any custom struct definitions found.
 - GZIP `./html` directory and store in program storage for extremely fast responses.
 - node script to watch for changes in `./models`, `./html`
 
