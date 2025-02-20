@@ -2,7 +2,7 @@ class ConsoleOut {
   messages = [];
 
   //prints message immediately 
-  print(msg = "") {
+  print(msg = "", type = "") {
     this.send(msg, type);
   }
 
@@ -11,6 +11,7 @@ class ConsoleOut {
     this.messages.push(msg);
   }
 
+  // print immediately 
   send(msg = "", type = null) {
     let c = ["", ""];
     if(msg.indexOf("ERROR") !== -1 || type == "ERROR") {
@@ -33,15 +34,15 @@ class ConsoleOut {
     this.messages.forEach(this.send);
   }
 
-  // clear the queue
-  clear() {
-    this.messages = [];
-  }
-
   // output the queue and clear when done.
   flush() {
     this.show();
-    this.clear();
+    this.messages = [];
+  } 
+
+  // clear the console
+  clear() {
+    console.log("\x1Bc");
   }
 }
 const globalConsole = new ConsoleOut();

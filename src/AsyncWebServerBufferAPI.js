@@ -85,6 +85,7 @@ class AsyncWebServerBufferAPI {
       if (data) {
         const buffer = this.encode(type, data);
         _options.body = buffer
+        _options.bodyRaw = data;
         _options.headers["Content-Type"] = "text/plain";
         if (this.useChecksum) {
           _options.headers[this.#checksumHeader] = this.#computeChecksum(new Uint8Array(buffer)).toString();
@@ -96,6 +97,7 @@ class AsyncWebServerBufferAPI {
         }
       }
       const response = await fetch(`${this.baseUrl}${url}`, _options);
+      response.method = method;
       response.request = { method, url, type, data, options };
       if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
       let output = null;
@@ -115,7 +117,7 @@ class AsyncWebServerBufferAPI {
         response.bodyRaw = output;
       }
       if(this.enableDebug) {
-        console.log(`${_options.method}: ${this.baseUrl}${url}`, _options, output);
+        console.log(`${_options.method}: ${this.baseUrl}${url}`, response);
       }
       return [output, response, response.headers.get(this.#typeHeader)];
   }
@@ -179,15 +181,25 @@ class AsyncWebServerBufferAPI {
   //   return out;
   // }
 
-  getEmpty(type) {
+  getEmptyType(type) {
     const typeInfo = this.getType(type);
     if(typeInfo.primitive) {
-      return this.#decodeClientType(type, 0);
+      const v = this.#decodeClientType(type, 0);
+      if(typeInfo.arraySize) {
+        v = Array.from({ length: typeInfo.arraySize }, () => v);
+      }
+      return v;
     }
     let fields = typeInfo.fields;
     let obj = {};
-    for(const { type, name } in fields) {
-      obj[name] = this.getEmpty(type);
+    for(const { type, name, arraySize } of fields) {
+      const v = this.getEmptyType(type);
+      if(arraySize) {
+        obj[name] = Array.from({ length: arraySize }, () => v);
+      }
+      else {
+        obj[name] = v;
+      }
     };
     return obj;
   }

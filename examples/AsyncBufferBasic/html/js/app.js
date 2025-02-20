@@ -1,68 +1,64 @@
-const App = async () => {
-  handleDarkMode();
+let api;
 
+const App = async () => {
+  handleDarkMode();  
   // Setup the api
-  const api = new AsyncWebServerBufferAPI({
+  api = new AsyncWebServerBufferAPI({
     baseUrl: '/api', // prepend all api requests here
     useChecksum: true, 
     enableDebug: true // console log the network transactions
   });
 
-  let data, settings, allTypes, res;
+  van.add(document.body, ApiTester());
+
   
-  // get AllTypes struct
-  [allTypes, res] = await api.get('/AllTypes', 'AllTypes');
-  van.add(document.body, await ShowResponse(data, res));
-  // tweak the struct 
-  Object.keys(allTypes).forEach(key => {
-    allTypes[key] += typeof allTypes[key] == "bigint" ? 10n : 10;
-  });
-  // modify AllTypes
-  [data, res] = await api.post('/AllTypes', 'AllTypes', allTypes);
-  van.add(document.body, await ShowResponse(data, res));
 
-  // get int
-  [data, res] = await api.get('/int', 'int');
-  van.add(document.body, await ShowResponse(data, res));
-  // modify value
-  [data, res] = await api.post('/int', 'int', 65000);
-  van.add(document.body, await ShowResponse(data, res));
 
-  // get value at index
-  [data, res] = await api.get('/intArray/9', 'int');
-  van.add(document.body, await ShowResponse(data, res));
-  // modify value at index
-  [data, res] = await api.post('/intArray/4', 'int', 65000);
-  van.add(document.body, await ShowResponse(data, res));
-
-  // get int array
-  [data, res] = await api.get('/intArray', 'int');
-  van.add(document.body, await ShowResponse(data, res));
-
-  // modify post data
-  data = data.map((v, index) => {
-    return index;
-  });
-  // modify int array
-  [data, res] = await api.post('/intArray', 'int', data);
-  van.add(document.body, await ShowResponse(data, res));
-
-  // get Settings struct
-  [settings, res] = await api.get('/Settings', 'Settings');
-  van.add(document.body, await ShowResponse(settings, res));
-
-  // tweak some Settings
-  settings.ssid = "newWiFi";
-  settings.password = "newPassword";
-  settings.colors.forEach(c => {
-    c.r = 255; // hot pink!
-    c.g = 25;
-    c.b = 127;
-  });
+  // let data, res;
   
-  // modify Settings struct
-  [settings, res] = await api.post('/Settings', 'Settings', settings);
-  van.add(document.body, await ShowResponse(settings, res));
+  // // get AllTypes struct
+  // [data, res] = await api.get('/AllTypes', 'AllTypes');
+  // // tweak the struct 
+  // Object.keys(data).forEach(key => {
+  //   data[key] += typeof data[key] == "bigint" ? 10n : 10;
+  // });
+  // // modify AllTypes
+  // [data, res] = await api.post('/AllTypes', 'AllTypes', data);
+
+  // // get int
+  // [data, res] = await api.get('/int', 'int');
+  // // modify value
+  // [data, res] = await api.post('/int', 'int', 65000);
+
+  // // get value at index
+  // [data, res] = await api.get('/intArray/9', 'int');
+  // // modify value at index
+  // [data, res] = await api.post('/intArray/4', 'int', 65000);
+
+  // // get int array
+  // [data, res] = await api.get('/intArray', 'int');
+
+  // // modify post data
+  // data = data.map((v, index) => {
+  //   return index;
+  // });
+  // // modify int array
+  // [data, res] = await api.post('/intArray', 'int', data);
+
+  // // get Settings struct
+  // [data, res] = await api.get('/Settings', 'Settings');
+
+  // // tweak some Settings
+  // data.ssid = "newWiFi";
+  // data.password = "newPassword";
+  // data.colors.forEach(c => {
+  //   c.r = 255; // hot pink!
+  //   c.g = 25;
+  //   c.b = 127;
+  // });
+  
+  // // modify Settings struct
+  // [data, res] = await api.post('/Settings', 'Settings', data);
 };
 
 const handleDarkMode = () => {
@@ -76,8 +72,49 @@ const handleDarkMode = () => {
 
 // VanJS Compoonents
 const { button, span, div, section, p, code, table, thead, tr, th, tbody, td, input, select, textarea, pre, b, a, h1, h2, h3, h4 } = van.tags;
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-const ShowResponse = async (data, res) => {
+const Run = ({sleepMs}) => {
+  const steps = van.state(0)
+  ;(async () => { for (; steps.val < 40; ++steps.val) await sleep(sleepMs) })()
+  return pre(() => `${" ".repeat(40 - steps.val)}🚐💨Hello VanJS!${"_".repeat(steps.val)}`)
+}
+
+const ApiTester = () => {
+  const loading = van.state(false);
+  const url = van.state('/Settings');
+  const method = van.state('POST');
+  const type = van.state('Settings');
+  const payload = van.state(api.getEmptyType(type.val));
+  const results = van.state([null, null]);
+  (async () => {
+    loading.val = true; 
+    //results.val = await api.fetch(method.val, url.val, type.val, payload.val);
+    await sleep(1000);
+    loading.val = false;
+  })();
+  console.log(loading.val, results.val);
+
+  return p(
+    { },
+    [
+      h3({}, "API Tester"),
+      loading.val ? "loading..." : "",
+      div({className: ""}, 
+        input({})
+      ),
+      ShowResponse(results),
+      Run({sleepMs: 500})
+    ],
+  );
+}
+
+
+
+const ShowResponse = (data, res) => {
+  if(res == null || data == null) {
+    return null;
+  }
   const title = `[${res.method}] ${res.url}`;
   // TODO: add tabs for request and response with raw buffer checkbox
   return p(

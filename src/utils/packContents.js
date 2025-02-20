@@ -9,36 +9,40 @@ const UglifyJS = requireWithInstall('uglify-es').minify;
 const mime = requireWithInstall('mime-types');
 
 async function makeUgly(filePath, byteBuffer) {
-  // TODO: Minify HTML, JS, CSS is still not working, consider using Rollup for this task.
-  // rollup could allow for inline includes to reduce requests.
+  try {
+    // TODO: Minify HTML, JS, CSS is still not working, consider using Rollup for this task.
+    // rollup could allow for inline includes to reduce requests.
 
-  var uglifyEsOptions = { parse: { bare_returns: false }, sourceMap: false };
-  switch(path.extname(filePath)) {
-    case ".js": {
-      const contents = Buffer.from(byteBuffer).toString("utf8");
-      uglifyEsOptions.parse.bare_returns = false;
-      const result = await minifyJS(contents, uglifyEsOptions);
-      return Buffer.from(result.code, "utf-8");
+    var uglifyEsOptions = { parse: { bare_returns: false }, sourceMap: false };
+    switch(path.extname(filePath)) {
+      case ".js": {
+        const contents = Buffer.from(byteBuffer).toString("utf8");
+        uglifyEsOptions.parse.bare_returns = false;
+        const result = await minifyJS(contents, uglifyEsOptions);
+        return Buffer.from(result.code, "utf-8");
+      }
+      case ".html": {
+        // not working!
+        const contents = Buffer.from(byteBuffer).toString("utf8");
+        const result = await minifyHTML(contents, {
+          collapseInlineTagWhitespace: true,
+          minifyCSS: true,
+          minifyJS: (text, inline) => {
+            uglifyEsOptions.parse.bare_returns = inline;
+            const result = UglifyJS(text, uglifyEsOptions);
+            return text;
+          },
+          removeComments: true,
+        });
+        return Buffer.from(result, "utf-8");
+      }
+      default: 
+        // do nothing
     }
-    case ".html": {
-      // not working!
-      const contents = Buffer.from(byteBuffer).toString("utf8");
-      const result = await minifyHTML(contents, {
-        collapseInlineTagWhitespace: true,
-        minifyCSS: true,
-        minifyJS: (text, inline) => {
-          uglifyEsOptions.parse.bare_returns = inline;
-          const result = UglifyJS(text, uglifyEsOptions);
-          return text;
-        },
-        removeComments: true,
-      });
-      return Buffer.from(result, "utf-8");
-    }
-    default: 
-      // do nothing
   }
-
+  catch(err) {
+    consoleOut.print(`ERROR: makeUgly minify error! \n  Skipping minification step for "${filePath}" \n  ${err}`);
+  }
   return byteBuffer;
 };
 
@@ -67,6 +71,7 @@ async function packContents(filePath, fileContents, options = {gzip: false, mini
     // original file was better :(
     byteBuffer = fileContents;
     savings = "";
+    options.gzip = false;
   }
   consoleOut.queue(`INFO: "${fileName}" - ${roundTo(byteBuffer.length/1024)}kb ${savings}`);
 
