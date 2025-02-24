@@ -131,10 +131,18 @@ The packing script **monitors `./models` and `./html`**, and will automatically 
   * [El](https://github.com/frameable/el) For those looking for class based components `(~2.16KB gzipped)` 
 
 ### **Run the packing script:**
+
+From the `root of your .ino project` run the `GenerateSources.js` script found in ESP32AsyncBuffer library.
+
+> ⚠️ You will need node `v20.10.0` or better to run the following script.
+
 ```shell
+# From your project root
 node ~/Documents/Arduino/libraries/ESP32AsyncBuffer/GenerateSources.js
 ```
 > If successful, a new file `dist/_STATIC_HTML_FILES.h` will appear in your project.
+> You may need to give node access to modify files on your system.
+
 
 ### **Test Your Setup**  
 1. **Compile and upload your sketch**  
@@ -166,8 +174,8 @@ Settings settings;
 ```
 
 ### **📡 GET Request: Fetch Struct Data**  
-- **Server** → Sends **binary payload**  
-- **Client** → **Decodes** into a JavaScript object  
+- **Server** → Sends **binary payload** directly from the settings struct.
+- **Client** → **Validates & Decodes** into a JavaScript object.
 ```js
 {
   "ssid": "mySsid",
@@ -183,8 +191,9 @@ Settings settings;
 ```
 
 ### **📡 POST Request: Update Struct Data**  
-- **Client** → **Encodes and sends binary payload**  
-- **Server** → **Directly copies** the received bytes  
+Pretend the user modifies the received data via some UI input controls and presses the **save button**. 
+- **Client** → **Encodes and sends binary payload**
+- **Server** → **Validates & Directly copies** the received bytes into the settings struct.
 ```cpp
 Serial.println(settings.ssid);     // "newSsid"
 Serial.println(settings.password); // "12345"
