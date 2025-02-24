@@ -15,19 +15,6 @@ const char* password = "password";
 // Create AsyncWebServer
 AsyncWebServerBuffer server(80);
 
-// Default Settings
-Settings settings = {
-    "MyWiFi", "SecretPass", 2, 1.1, {42, true}, 
-    {
-      {1, false}, {2, false}, {3, false}, {4, false}, {5, false}
-    },
-    {
-      {255, 255, 255},
-    }
-};
-AllTypes allTypes = {0};
-
-
 // Handle 404 and OPTIONS
 void notFound(AsyncWebServerRequest *request)
 {
@@ -36,8 +23,6 @@ void notFound(AsyncWebServerRequest *request)
   request->send(404, "text/plain", "404: Not found!");
 }
 
-int test_int = 0;
-int test_int_array[10] = {0};
 void setup() {
     Serial.begin(115200);
     WiFi.begin(ssid, password);
@@ -46,41 +31,23 @@ void setup() {
       Serial.println("Connecting to WiFi...");
     }
     
-
     Serial.println("Connected!");
     Serial.println(WiFi.localIP());
-
-    initializeStaticFilesRequests(&server);
-
-    // Adds GET, POST ArrayBuffer routes on the server listener.
-    server.onBuffer("/api/int", "int", (uint8_t*)&test_int, sizeof(test_int) );    
     
-    // GET index of intArray
-    server.on("/api/intArray/*", HTTP_GET, [](AsyncWebServerRequest *request) { 
-      const char type[] = "int";
-      int index = request->url().substring(14).toInt();
-      if(index < 0 || index >= sizeof(test_int_array) / sizeof(test_int_array[0])) {
-        notFound(request);
-        return;
+    // generated helper function for serving all the static generated files found in _STATIC_HTML_FILES.h
+    initializeStaticFilesRequests(&server);
+    server.onBuffer("/api/Settings", "Settings", (uint8_t *)&settings, sizeof(settings),
+      [](AsyncWebServerRequest *request) { // on GET response
+        // You can update or modify settings or add headers to the response here before it is sent off.
+        Serial.printf("GET %s OK!\n", request->url());
+        return true; // send the response
+      }, 
+      [](AsyncWebServerRequest *request) { // on POST response
+        // You can update or modify settings or add headers to the response here before it is sent off.
+        Serial.printf("POST %s OK!\n", request->url());
+        return true; // send the response
       }
-      server.sendResponseBuffer(request, type, (uint8_t *)&test_int_array[index], sizeof(test_int_array[index])); 
-    });
-    // POST index of intArray
-    server.on("/api/intArray/*", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, [](AsyncWebServerRequest *request, uint8_t *requestData, size_t requestSize, size_t requestIndex, size_t requestTotal) { 
-      const char type[] = "int";
-      int index = request->url().substring(14).toInt(); 
-      if(index < 0 || index >= sizeof(test_int_array) / sizeof(test_int_array[0])) {
-        notFound(request);
-        return;
-      }
-      if(server.processRequestBuffer(request, requestData, requestSize, requestIndex, requestTotal, type, (uint8_t *)&test_int_array[index], sizeof(test_int_array[index])) == AsyncWebServerBufferStatus::SUCCESS){
-        server.sendResponseBuffer(request, type, (uint8_t *)&test_int_array[index], sizeof(test_int_array[index]));
-      }
-    });
-
-    server.onBuffer("/api/intArray", "int", (uint8_t *)&test_int_array, sizeof(test_int_array));
-    server.onBuffer("/api/Settings", "Settings", (uint8_t *)&settings, sizeof(settings));
-    server.onBuffer("/api/AllTypes", "AllTypes", (uint8_t *)&allTypes, sizeof(allTypes));
+    );
 
     // CORS only needed for STA mode
     // server.disableCORS(); // useful for local development

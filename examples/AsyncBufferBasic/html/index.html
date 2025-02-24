@@ -3,73 +3,23 @@
 <head>  
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#000000"/>
+  <meta name="theme-color" content="#ffffff"/>
   <title>AsyncBufferBasic</title>
-  <script src="js/vanjs.js"></script> <!-- amazing and compact UI Framework -->
-  <script src="js/app.js"></script>
+  <link rel="stylesheet" href="css/base.css">
   <link rel="icon" type="image/x-icon" href="img/favicon.png">
-  <!-- <link rel="shortcut icon" href="img/favicon.png">
-  <link rel="apple-touch-icon" href="img/favicon.png"> -->
 
   <!-- 
-  Use base tag for local development update the ip to your ESP32
 
-  
-  All  relative requests after this point will prepend the base href.
+  <base href="http://<ESP32 IP ADDRESS>/" />
 
+  Use base tag for local development update the ip to your ESP32  
+  All relative requests after this point will prepend the base href.
   You will also need to disable cores on your server for this to work.
   server.disableCORS(); // useful for local development
+
   -->
 
-  <base href="http://192.168.0.60/" />
   <script src="js/models.js"></script> <!-- GENERATED SCRIPT -->
-
-  <style>
-    :root {
-      --main-bg-color: #fff;
-      --main-text-color: #000;
-      --padding: 24px;
-      --margin: 24px;
-    }
-
-    .dark {
-      --main-bg-color: #111;
-      --main-text-color: #fff;
-    }
-
-    body,
-    html {
-      margin: 0;
-      padding: var(--padding);
-      font-family: 'Courier New', Courier, monospace;
-      background-color: var(--main-bg-color);
-      color: var(--main-text-color);
-    }
-    a, a:active, a:visited, a:hover {
-      color: var(--main-text-color);
-    }
-    p, section {
-      background-color: #88888822;
-      padding: var(--padding);
-      border-radius: var(--padding);
-    }
-    section {
-      margin-top: calc(var(--padding) / 2);
-      padding-top: calc(var(--padding) / 2);
-      padding-bottom: calc(var(--padding) / 2);
-    }
-    img {
-      vertical-align: top;
-    }
-    .response {
-      margin-left: calc(var(--padding) * -1);
-      margin-right: calc(var(--padding) * -1);
-      border-radius: 0;
-    }
-    .line:hover {
-      background-color: #88888822;
-    }
-  </style>
 </head>
 
 <body>
@@ -77,7 +27,50 @@
   <p>Open the developer tools to inspect the console and network.</p>
 
   <script>
-    App(); // start the app! Have a look at "js/app.js"
+    // Setup the AsyncBuffer API 
+    api = new AsyncBufferAPI({
+      baseUrl: '/api', // prepend all api requests here
+      useChecksum: true,
+      enableDebug: false // console log the network transactions
+    });
+
+    const App = async () => {
+      let data, res;
+      // get the settings object
+      [data, res] = await api.get('/Settings', 'Settings');
+      console.log("GET /api/Settings", data, console.log(data.version));
+      if(data.version = 1.1) {
+        // tweak some Settings
+        data.ssid = "newWiFi";
+        data.password = "newPassword";
+        data.mode = 3
+        data.colors.forEach(c => {
+          c.r = 255; // hot pink!
+          c.g = 25;
+          c.b = 127;
+        });
+      }
+      else {
+
+      }
+
+      // post the new Settings struct
+      [data, res, type] = await api.post('/Settings', 'Settings', data);
+      console.log("POST /api/Settings", data, console.log(data.version));
+    };
+
+    App(); // start the app!
+
+    // choose light or dark theme
+    const handleDarkMode = () => {
+      const isDarkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (isDarkMode) {
+        document.documentElement.classList.add("dark");
+      }
+      const bgc = getComputedStyle(document.documentElement).getPropertyValue('--main-bg-color');
+      document.querySelector('meta[name="theme-color"]').setAttribute('content', bgc);
+    };
+    handleDarkMode();
   </script>
 </body>
 </html>

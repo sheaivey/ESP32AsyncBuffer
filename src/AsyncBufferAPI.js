@@ -1,4 +1,4 @@
-/*  AsyncWebServerBufferAPI
+/*  AsyncBufferAPI
     By: Shea Ivey
     Version: 1.0.0_BETA
     [ key, { s=byte size, m=buffer conversion method, p=primitive } ], // Primitive type format
@@ -12,7 +12,7 @@
       ] 
     }, ... ],
 */
-class AsyncWebServerBufferAPI {
+class AsyncBufferAPI {
   #typeHeader = "X-Type";
   #checksumHeader = "X-Checksum";
   #_types = new Map([
@@ -81,14 +81,15 @@ class AsyncWebServerBufferAPI {
 
   async fetch(method = "GET", url, type = null, data = null, options = {}) {
       const _options = { method, headers: {}, ...options};
-      _options.headers[this.#typeHeader] = type;
-      if (data) {
-        const buffer = this.encode(type, data);
-        _options.body = buffer
-        _options.bodyRaw = data;
+      if(type !== null) {
+        _options.headers[this.#typeHeader] = type;
+      }
+      if (method != "GET") {      
+        _options.body = this.encode(type, data || 0);
+        _options.bodyDecoded = data;
         _options.headers["Content-Type"] = "text/plain";
         if (this.useChecksum) {
-          _options.headers[this.#checksumHeader] = this.#computeChecksum(new Uint8Array(buffer)).toString();
+          _options.headers[this.#checksumHeader] = this.#computeChecksum(new Uint8Array(_options.body)).toString();
         }
       }
       else {
@@ -101,7 +102,7 @@ class AsyncWebServerBufferAPI {
       response.request = { method, url, type, data, options };
       if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
       let output = null;
-      if(response.headers.get("Content-Type") === 'application/octet-stream') {
+      if(response.headers.get("Content-Type") === 'application/octet-stream' && response.headers.has(this.#typeHeader)) {
         const buffer = await response.arrayBuffer();
         const computedChecksum = this.#computeChecksum(new Uint8Array(buffer)).toString();
         const responseChecksum = response.headers.get(this.#checksumHeader);
@@ -109,19 +110,18 @@ class AsyncWebServerBufferAPI {
           // TODO: could automatically retry until success or n number of failed attempts.
           throw new Error('Checksum failed!');
         }
-        response.bodyRaw = buffer;
         output = this.decode(response.headers.get(this.#typeHeader), buffer);
       }
       else {
         output = await response.text();
-        response.bodyRaw = output;
       }
+      response.bodyDecoded = output;
       if(this.enableDebug) {
         console.log(`${_options.method}: ${this.baseUrl}${url}`, response);
       }
       return [output, response, response.headers.get(this.#typeHeader)];
   }
-  async get(url, type, options = {}) { return await this.fetch('GET', url, type, null, options); };
+  async get(url, type = null, options = {}) { return await this.fetch('GET', url, type, null, options); };
   async put(url, type, data = null, options = {}) { return await this.fetch('PUT', url, type, data, options); };
   async post(url, type, data = null, options = {}) { return await this.fetch('POST', url, type, data, options); };
   async delete(url, type, data = null, options = {}) { return await this.fetch('DELETE', url, type, data, options); };
@@ -140,6 +140,9 @@ class AsyncWebServerBufferAPI {
       return value;
     }
     switch(type) {
+      case "float": 
+        return Math.fround(value);
+        // return new Float32Array(1)[0] = value;
       case "bool": 
         return value ? 1 : 0;
       case "char": 
@@ -154,6 +157,8 @@ class AsyncWebServerBufferAPI {
       return value;
     }
     switch(type) {
+      case "float": 
+        return Math.fround(value);
       case "bool": 
         return !!value;
       case "char": 
@@ -196,6 +201,9 @@ class AsyncWebServerBufferAPI {
       const v = this.getEmptyType(type);
       if(arraySize) {
         obj[name] = Array.from({ length: arraySize }, () => v);
+        if(type === 'char') {
+          obj[name] = obj[name].join('');
+        }
       }
       else {
         obj[name] = v;
@@ -335,4 +343,4 @@ class AsyncWebServerBufferAPI {
   }
 }
 // so we can use this with require
-typeof module === "object" ? module.exports = AsyncWebServerBufferAPI : null;
+typeof module === "object" ? module.exports = AsyncBufferAPI : null;

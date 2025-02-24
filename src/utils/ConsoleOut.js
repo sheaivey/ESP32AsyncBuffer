@@ -2,36 +2,40 @@ class ConsoleOut {
   messages = [];
 
   //prints message immediately 
-  print(msg = "", type = "") {
-    this.send(msg, type);
+  print(...args) {
+    this.send(...args);
+  }
+
+  print(...args) {
+    this.send(...args);
   }
 
   // queues message for displaying later
-  queue(msg) {
-    this.messages.push(msg);
+  queue(msg, ...args) {
+    this.messages.push([msg, args]);
   }
 
   // print immediately 
-  send(msg = "", type = null) {
+  send(msg = "", ...args) {
     let c = ["", ""];
-    if(msg.indexOf("ERROR") !== -1 || type == "ERROR") {
+    if(msg.indexOf("ERROR") !== -1) {
       c = ["\x1b[31m", "\x1b[0m"];
     }
-    else if(msg.indexOf("WARNING" || type == "WARNING") !== -1) {
+    else if(msg.indexOf("WARNING") !== -1) {
       c = ["\x1b[33m", "\x1b[0m"];
     }
-    else if(msg.indexOf("INFO" || type == "INFO") !== -1) {
+    else if(msg.indexOf("INFO") !== -1) {
       c = ["\x1b[34m", "\x1b[0m"];
     }
-    else if(msg.indexOf("SUCCESS" || type == "SUCCESS") !== -1) {
+    else if(msg.indexOf("SUCCESS") !== -1) {
       c = ["\x1b[32m", "\x1b[0m"];
     }
-    console.log(`${c[0]}${msg}${c[1]}`);
+    console.log(`${c[0]}${msg}${c[1]}`, ...args);
   }
   
   // output the queue
   show() {
-    this.messages.forEach(this.send);
+    this.messages.forEach(([m, a]) => this.send(m, ...a));
   }
 
   // output the queue and clear when done.

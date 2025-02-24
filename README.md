@@ -51,7 +51,8 @@ setup() {
 // ./models/MyStruct.h
 #pragma pack(1) // tells the compiler not to optimize the byte order
 struct MyStruct {
-  int myValue;
+  char name[16];
+  int value;
 };
 ```
 ```html
@@ -59,7 +60,7 @@ struct MyStruct {
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <!-- "/js/models.js" is generated and provides the AsyncWebServerBufferAPI class. -->
+    <!-- "/js/models.js" is generated and provides the AsyncBufferAPI class. -->
     <script src="/js/models.js"></script>
   </head>
   <body>
@@ -67,7 +68,7 @@ struct MyStruct {
     <p>Open the developer tools to inspect the console and network.</p>
     <script>
       // Setup the api
-      const api = new AsyncWebServerBufferAPI({
+      const api = new AsyncBufferAPI({
         baseUrl: '/api', // prepend all api requests here
         useChecksum: true, // good for rejecting garbage during transmission
         enableDebug: true // console log the network transactions
@@ -80,6 +81,7 @@ struct MyStruct {
         [data, res] = await api.post('/int', 'int', 42);
         // get myStruct
         [data, res] = await api.get('/MyStruct', 'MyStruct');
+        data.name = "Buffy";
         data.value = 42;
         // modify myStruct
         [data, res] = await api.post('/MyStruct', 'MyStruct', data);
@@ -112,7 +114,7 @@ struct Color {
   uint8_t r;
   uint8_t g;
   uint8_t b;
-}
+};
 
 #pragma pack(1)
 struct Settings {

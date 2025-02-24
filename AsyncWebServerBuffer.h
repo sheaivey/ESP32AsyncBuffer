@@ -30,7 +30,7 @@ class AsyncWebServerBuffer : public AsyncWebServer
           }
         }
         AsyncWebServerResponse *response = request->beginResponse_P(200, contentType, body, len);
-        response->addHeader("Cache-Control", "no-cache");
+        response->addHeader("Cache-Control", "max-age: 60");
         response->addHeader("ETag", etag);
         if(gzip) {
           response->addHeader("Content-Encoding", "gzip");
@@ -143,11 +143,7 @@ class AsyncWebServerBuffer : public AsyncWebServer
           return AsyncWebServerBufferStatus::CHECKSUM_HEADER_MISMATCH;
         }
       }
-      else
-      {
-        request->send(400, "text/plain", "Invalid binary size");
-        return AsyncWebServerBufferStatus::BUFFER_SIZE_MISMATCH;
-      }
+      request->send(400, "text/plain", "Invalid binary size");
       return AsyncWebServerBufferStatus::BUFFER_SIZE_MISMATCH;
     }
 

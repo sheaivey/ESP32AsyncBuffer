@@ -1,0 +1,44 @@
+:root {
+  --main-bg-color: #fff;
+  --main-text-color: #000;
+  --padding: 24px;
+  --margin: 24px;
+}
+
+.dark {
+  --main-bg-color: #111;
+  --main-text-color: #fff;
+}
+
+body,
+html {
+  margin: 0;
+  padding: var(--padding);
+  font-family: 'Courier New', Courier, monospace;
+  background-color: var(--main-bg-color);
+  color: var(--main-text-color);
+}
+a, a:active, a:visited, a:hover {
+  color: var(--main-text-color);
+}
+p, section {
+  background-color: #88888822;
+  padding: var(--padding);
+  border-radius: var(--padding);
+}
+section {
+  margin-top: calc(var(--padding) / 2);
+  padding-top: calc(var(--padding) / 2);
+  padding-bottom: calc(var(--padding) / 2);
+}
+img {
+  vertical-align: top;
+}
+.response {
+  margin-left: calc(var(--padding) * -1);
+  margin-right: calc(var(--padding) * -1);
+  border-radius: 0;
+}
+.line:hover {
+  background-color: #88888822;
+}
