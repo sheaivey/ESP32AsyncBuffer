@@ -25,7 +25,7 @@ async function main() {
   console.log(`\nProcessing all structs in "${MODELS_DIR.replace(workingDir,".")}"...\n`);
   let packedSize = 0;
   let unpackedSize = 0;
-  // scan for models models
+  // scan ./models structs
   let structDefinitions = readDirR(MODELS_DIR)
     .filter((file) => file.indexOf("/build") == -1 && !path.basename(file).startsWith("_") && (file.endsWith(".h") || file.endsWith(".cpp")))
     .map((file) => fs.readFileSync(file, "utf-8"))

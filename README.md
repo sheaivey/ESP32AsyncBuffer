@@ -1,119 +1,156 @@
-# <img src="examples/AsyncBufferBasic/html/img/favicon.png" width="32" height="32" alt="ESP32AsyncBuffer" style="vertical-align: top" /> ESP32AsyncBuffer
+# <img src="examples/AsyncBufferBasic/html/img/favicon.png" width="32" height="32" alt="ESP32AsyncBuffer" style="vertical-align: top" /> ESP32AsyncBuffer  
 
-This library provides solution to send or receive binary data structures to the client and with encoding and decoding helper functions so you can operate on the data easily.
+This library provides a solution to efficiently **send and receive binary data structures** between an ESP32 and a client. It includes **encoding and decoding helper functions**, allowing easy data manipulation with minimal overhead.  
 
-### Why would you want this?
-Using JSON to pass structured data around between client and server which can be a heavy operation to encode and parse on embedded both in memory and speed.
-The idea here is simple, let the client do all the heavy work of encoding and decoding and let the microcontroler work directly with structured binary data.
+---
 
-# Features
-- Extremely fast send/receive times
-- Supports nested structures
-- Uses almost no dynamic memory
-- Transfer extremely large datasets
-- Minimal over the wire payload sizes (no JSON fluff, just bytes!)
-- Checksums
-- `js/models.js` is 2.5kb for the client javascript code to encode and decode + any custom struct definitions found.
-- GZIP `./html` directory and store in program storage for extremely fast responses.
-- node script to watch for changes in `./models`, `./html`
+## **Why use this library?**  
 
-# Installation
-Please note that this is an over simplified setup and you should look at `./examples/AsyncBufferBasic` for a more comprehensive project example.
+Using **JSON** to transfer structured data between a client and an embedded system is inefficient:  
+- **Memory usage**: JSON encoding/decoding is expensive on microcontrollers.  
+- **Processing time**: Parsing JSON adds unnecessary delays.  
+- **Payload size**: JSON introduces **extra characters (fluff)**, increasing data size.  
 
-First you will need to clone or copy this library into 
+### **Key Idea**  
+Instead of JSON, **let the client handle encoding/decoding** while the **ESP32 works directly with binary data**. This results in **smaller, faster, and more efficient communication**.
+
+---
+
+## **Features**  
+✅ **Extremely fast send/receive times**  
+✅ **Supports nested structures** (structs within structs)  
+✅ **Uses minimal dynamic memory** (almost none)  
+✅ **Handles very large datasets** efficiently  
+✅ **Minimal payload sizes** (binary instead of JSON)  
+✅ **Checksum support** for integrity verification  
+✅ **Lightweight client decoder**: `js/models.js` under **1.75 KB**  
+✅ **GZIP support**: Store and serve compressed static files for **faster web responses**  
+✅ **Automatic source generation**: Watches `./models` and `./html` for changes  
+
+---
+
+## **Installation**  
+
+> ⚠️ This is a simplified setup. Check `./examples/AsyncBufferBasic` for a complete example.  
+
+### **1️⃣ Install the Library**  
+Clone or copy this repository into your Arduino libraries folder:  
+
 ```shell
-~/Documents/Arduino/libraries/ESP32AsyncBuffer
+git clone https://github.com/your-repo/ESP32AsyncBuffer.git ~/Documents/Arduino/libraries/ESP32AsyncBuffer
 ```
 
-In your arduino project include and create a server. 
+### **2️⃣ Include the Library and Set Up a Server**  
 ```cpp
-// ...
-#include "dist/_STATIC_HTML_FILES.h" // this file will be generated
+#include "dist/_STATIC_HTML_FILES.h" // Auto-generated file
 #include "AsyncWebServerBuffer.h"
 #include "models/MyStruct.h"
+
 AsyncWebServerBuffer server(80);
 
 int test_int = 0;
 MyStruct myStruct = {0};
-setup() {
-  // ...
-  // generated function that sets up routes to static files
+
+void setup() {
+  // Initialize static file routes (auto-generated)
   initializeStaticFilesRequests(&server);
-  // Adds GET, POST ArrayBuffer routes on the server listener.
-  server.onBuffer("/api/int", "int", (uint8_t*)&test_int, sizeof(test_int) ); 
-  server.onBuffer("/api/MyStruct", "MyStruct", (uint8_t*)&myStruct, sizeof(myStruct) ); 
+
+  // Add GET and POST handlers for binary data
+  server.onBuffer("/api/int", "int", (uint8_t*)&test_int, sizeof(test_int)); 
+  server.onBuffer("/api/MyStruct", "MyStruct", (uint8_t*)&myStruct, sizeof(myStruct)); 
+
   server.begin();
 }
 ```
 
-## Create some structs and html
-```c++ 
+---
+
+## **3️⃣ Define Your Data Structures**  
+Create a struct in **C++**:  
+```cpp
 // ./models/MyStruct.h
-#pragma pack(1) // tells the compiler not to optimize the byte order
+#pragma pack(1) // Ensures correct byte alignment
 struct MyStruct {
   char name[16];
   int value;
 };
 ```
+
+---
+
+### **4️⃣ Create the Web Interface**
 ```html
 <!-- ./html/index.html -->
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <!-- "/js/models.js" is generated and provides the AsyncBufferAPI class. -->
-    <script src="/js/models.js"></script>
+    <script src="/js/models.js"></script> <!-- Auto-generated -->
   </head>
   <body>
-    <h1> Hello Buffer</h1>
+    <h1>Hello Buffer</h1>
     <p>Open the developer tools to inspect the console and network.</p>
     <script>
-      // Setup the api
+      // Initialize API
       const api = new AsyncBufferAPI({
-        baseUrl: '/api', // prepend all api requests here
-        useChecksum: true, // good for rejecting garbage during transmission
-        enableDebug: true // console log the network transactions
+        baseUrl: '/api',
+        useChecksum: true,  // Reject corrupted data
+        enableDebug: true   // Log network transactions
       });
-      const App = async () => {App
+
+      const App = async () => {
         let data, res;
-        // get test_int
+
+        // Read and modify an integer
         [data, res] = await api.get('/int', 'int');
-        // modify test_int
         [data, res] = await api.post('/int', 'int', 42);
-        // get myStruct
+
+        // Read and modify a struct
         [data, res] = await api.get('/MyStruct', 'MyStruct');
         data.name = "Buffy";
         data.value = 42;
-        // modify myStruct
         [data, res] = await api.post('/MyStruct', 'MyStruct', data);
-      }
-      App(); // kick off the App
+      };
+
+      App(); // Run
     </script>
   </body>
 </html>
 ```
 
-### Generating Sources
-In order to facilitate encoding and decoding on the client we need a way to know how the byte structure on the client. This library has a script that will monitor `./models`, `./html` directories and generate those byte structures and gzip them automatically.
+---
 
-You will need to have node installed and accessible from the terminal.
+## **5️⃣ Generating Sources**  
 
-Using a terminal cd into the root of your project directory and run the following command.
+The packing script **monitors `./models` and `./html`**, and will automatically regenerate required sources.
+
+* Any `.h` `.cpp` files found in `./models` will get scanned for structs and generate info for decoding on the client.
+* All files found in `./html` will attempt to be minified and gzipped and routes will get created for serving each static file. All requests will also have caching with an etag and max-age validation for quicker responses.
+* Have a look at the following lightweight UI frameworks for creating reactive single page apps.
+  * [VanJS](https://vanjs.org) For those who think every byte matters `(~1.04KB gzipped)`
+  * [Preact](https://preactjs.com) For those familiar with react `(~5.19KB gzipped)`
+  * [El](https://github.com/frameable/el) For those looking for class based components `(~2.16KB gzipped)` 
+
+### **Run the packing script:**
 ```shell
 node ~/Documents/Arduino/libraries/ESP32AsyncBuffer/GenerateSources.js
 ```
-If everything succeeded you should now see in your project directory `dist/_STATIC_HTML_FILES.h`
+> If successful, a new file `dist/_STATIC_HTML_FILES.h` will appear in your project.
 
-You can now compile your project and test it out by visiting `http://<ESP32_IP>/` in the browser and then inspecting the dev tools.
+### **Test Your Setup**  
+1. **Compile and upload your sketch**  
+2. **Visit** `http://<ESP32_IP>/` in your browser  
+3. **Open Developer Tools** (F12) to inspect network activity  
 
+---
 
-# How does it work?
-Imagine you have these structs
+## **How It Works**  
+
+### **Example: Handling Structs**  
+Consider the following **C++ structures**:  
 ```cpp
-#pragma pack(1) // tells the compiler not to optimize the byte order
+#pragma pack(1)
 struct Color {
-  uint8_t r;
-  uint8_t g;
-  uint8_t b;
+  uint8_t r, g, b;
 };
 
 #pragma pack(1)
@@ -122,14 +159,15 @@ struct Settings {
   char password[16] = "password";
   uint8_t mode = 1;
   float version = 1.1;
-  Color colors[3] = {0}; // black
+  Color colors[3] = {0}; // Array of 3 colors (default: black)
 };
 
 Settings settings;
 ```
 
-### Server receives GET request for a Settings struct:
-**Server** `sends binary payload` -> **client** `decodes binary payload into js object`
+### **📡 GET Request: Fetch Struct Data**  
+- **Server** → Sends **binary payload**  
+- **Client** → **Decodes** into a JavaScript object  
 ```js
 {
   "ssid": "mySsid",
@@ -137,29 +175,34 @@ Settings settings;
   "mode": 1,
   "version": 1.1,
   "colors": [
-    {"r": 0, "g": 0, "b": 0},
-    {"r": 0, "g": 0, "b": 0},
-    {"r": 0, "g": 0, "b": 0}
+    { "r": 0, "g": 0, "b": 0 },
+    { "r": 0, "g": 0, "b": 0 },
+    { "r": 0, "g": 0, "b": 0 }
   ]
 }
 ```
 
-### Server receives POST request for a Settings struct:
-Lets say the user modifies their `ssid`, `password`, `mode` and the `color` at index `0` to something new.
-
-**Client** `encodes settings object and sends binary payload` -> **server** `memcpy the binary data directly into the Settings Structure`
+### **📡 POST Request: Update Struct Data**  
+- **Client** → **Encodes and sends binary payload**  
+- **Server** → **Directly copies** the received bytes  
 ```cpp
 Serial.println(settings.ssid);     // "newSsid"
 Serial.println(settings.password); // "12345"
 Serial.println(settings.mode);     // 6
+
 Color *c = &settings.colors[0];
-Serial.printf("r: %d, g: %d, b: %d\n", c->r, c->g, c->b) // r: 255, g: 0, b: 0 ... red :)
+Serial.printf("r: %d, g: %d, b: %d\n", c->r, c->g, c->b); // r: 255, g: 0, b: 0
 ```
 
-# Future Plans
-- AsyncWebSocketBuffer - websocket support for buffer streams
-- AsyncESPNowBuffer - ESPNow support for buffer streams
-- Possibly create middleware for new ESPAsyncWeb library.
+---
 
+## **Future Plans 🚀**  
+- **WebSockets Support** (`AsyncWebSocketBuffer`)  
+- **ESP-NOW Support** (`AsyncESPNowBuffer`)  
+- **Middleware for ESPAsyncWeb** (newer async web server libraries)  
+- **More examples and integrations**  
 
-# License 
+---
+
+## **License**  
+This project is licensed under **MIT License**. 
