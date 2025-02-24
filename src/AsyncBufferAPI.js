@@ -7,8 +7,10 @@
       fields: [ 
         { 
           type: "", // primitive type or struct type
-          name: ""  // parameter name
-        } 
+          name: "",  // parameter name
+          arraySize: 0, // array size
+          value: 0 // default value
+        }
       ] 
     }, ... ],
 */
@@ -141,7 +143,7 @@ class AsyncBufferAPI {
     }
     switch(type) {
       case "float": 
-        return Math.fround(value);
+        return parseFloat(value.toFixed(6));
         // return new Float32Array(1)[0] = value;
       case "bool": 
         return value ? 1 : 0;
@@ -158,7 +160,7 @@ class AsyncBufferAPI {
     }
     switch(type) {
       case "float": 
-        return Math.fround(value);
+        return parseFloat(value.toFixed(6));
       case "bool": 
         return !!value;
       case "char": 

@@ -18,6 +18,7 @@
   server.disableCORS(); // useful for local development
 
   -->
+  <base href="http://192.168.0.60/" />
 
   <script src="js/models.js"></script> <!-- GENERATED SCRIPT -->
 </head>
@@ -37,9 +38,9 @@
     const App = async () => {
       let data, res;
       // get the settings object
-      [data, res] = await api.get('/Settings', 'Settings');
-      console.log("GET /api/Settings", data, console.log(data.version));
-      if(data.version = 1.1) {
+      [data, res, type] = await api.get('/Settings', 'Settings');
+      console.log("GET: /api/Settings", type, data);
+      if(data.version === 1.1) {
         // tweak some Settings
         data.ssid = "newWiFi";
         data.password = "newPassword";
@@ -51,12 +52,12 @@
         });
       }
       else {
-
+        console.log("Unknown settings version!", data.version);
       }
 
       // post the new Settings struct
       [data, res, type] = await api.post('/Settings', 'Settings', data);
-      console.log("POST /api/Settings", data, console.log(data.version));
+      console.log("POST: /api/Settings", type, data);
     };
 
     App(); // start the app!
