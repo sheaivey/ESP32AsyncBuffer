@@ -83,7 +83,7 @@ async function main() {
 
   let customTypes = false;
   outputContents += `// All known types
-enum AsyncBufferTypes {
+enum AsyncBufferType {
   UNKNOWN_TYPE = -1,
 
   // Primitive Types
@@ -104,7 +104,7 @@ ${allTypes.map((t) => {
   const char* const AsyncBufferTypeNames[] = {
   ${getAllTypes().map((t) => `"${t.name}"`).join(', ')}
 };\n\n
-// AsyncBufferTypes and AsyncBufferTypeNames must be defiend 
+// AsyncBufferType and AsyncBufferTypeNames must be defiend 
 // before including AsyncBuffer.h
 #include "AsyncBuffer.h"\n`;
 

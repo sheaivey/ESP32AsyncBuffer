@@ -14,18 +14,22 @@ Using **JSON** to transfer structured data between a client and an embedded syst
 ### **Key Idea**  
 Instead of JSON, **let the client handle encoding/decoding** while the **ESP32 works directly with binary data**. This results in **smaller, faster, and more efficient communication**.
 
+With all the features and bonus features building embedded single page apps has never been easier.
+
 ---
 
-## **Features**  
-✅ **Extremely fast send/receive times**  
-✅ **Supports nested structures** (structs within structs)  
-✅ **Uses minimal dynamic memory** (almost none)  
-✅ **Handles very large datasets** efficiently  
-✅ **Minimal payload sizes** (binary instead of JSON)  
-✅ **Checksum support** for integrity verification  
-✅ **Lightweight client decoder**: `js/models.js` under **1.75 KB**  
-✅ **GZIP support**: Store and serve compressed static files for **faster static file responses** 🚀  
+## **Core Features**  
+✅ **Extremely fast send/receive times**: binary instead of JSON  
+✅ **Minimal payload sizes**: (decoded on the client into JavaScript object)  
+✅ **Supports nested structures**: (structs within structs)  
+✅ **Uses minimal dynamic memory**: (`memcpy()` directly into variables)  
+✅ **Handles very large datasets**: efficiently  
+✅ **Checksum support**: for integrity verification  
+✅ **Lightweight client decoder**: `js/models.js`
+### Bonus Features!! 😻  
 ✅ **Automatic source generation**: Watches `./models` and `./html` for changes  
+✅ **GZIP support**: Store and serve compressed static files for **faster static file responses** 🚀  
+✅ **Cache Control**: `Etag` `If-None-Match` `304 Not Modified` for static files 🚀    
 
 ---
 
@@ -146,7 +150,7 @@ node ~/Documents/Arduino/libraries/ESP32AsyncBuffer/GenerateSources.js
 ./GenerateSource.json  # Ability to change bundling settings.
 ```
 > Setting Options for generating sources. Useful for debugging
-```json
+```js
 {
   "modelsDir": "/models", // watch for struct changes here
   "htmlDir": "/html", // watch for static html files changes here
@@ -224,8 +228,10 @@ Serial.printf("r: %d, g: %d, b: %d\n", c->r, c->g, c->b); // r: 255, g: 0, b: 0
 ## **Future Plans 🚀**  
 - **WebSockets Support** (`AsyncWebSocketBuffer`)  
 - **ESP-NOW Support** (`AsyncESPNowBuffer`)  
-- **Middleware for ESPAsyncWeb** (newer async web server libraries)  
-- **More examples and integrations**  
+- **More examples and integrations** 
+  - Boilerplate app using Preact with captive portal and wifi setup.
+  - Websocket data streaming
+  - ESP Now data streaming
 
 ---
 

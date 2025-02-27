@@ -20,24 +20,27 @@ struct AsyncBufferStaticFile {
 #endif
 
 
-const char* getAsyncTypeName(AsyncBufferTypes type) {
-  if(type < 0 || type >= AsyncBufferTypes::_EOF) {
+const char* getAsyncTypeName(AsyncBufferType type) {
+  if(type < 0 || type >= AsyncBufferType::_EOF) {
     return "unknown type";
   }
   return AsyncBufferTypeNames[type];
 }
 
-AsyncBufferTypes getAsyncTypeFromName(const char* typeName) {
-  for (size_t i = AsyncBufferTypes::_EOF - 1; i >= 0; --i) {
+AsyncBufferType getAsyncTypeFromName(const char* typeName) {
+  for (size_t i = AsyncBufferType::_EOF - 1; i >= 0; --i) {
     if (strcmp(AsyncBufferTypeNames[i], typeName) == 0) {
-      return (AsyncBufferTypes) i; // Found, return index
+      return (AsyncBufferType) i; // Found, return index
     }
   }
-  return AsyncBufferTypes::UNKNOWN_TYPE;
+  return AsyncBufferType::UNKNOWN_TYPE;
 }
 
 // Function to compute Fletcher16 checksum
 uint16_t computeChecksum(const uint8_t *data, size_t length) {
+  if(_ASYNC_BUFFER_USE_CHECKSUM == false) {
+    return 0; // no checksum
+  }
   uint16_t sum1 = 0;
   uint16_t sum2 = 0;
   for (size_t i = 0; i < length; i++)

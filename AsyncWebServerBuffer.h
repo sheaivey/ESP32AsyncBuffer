@@ -48,103 +48,90 @@ class AsyncWebServerBuffer : public AsyncWebServer
     AsyncWebServerBufferStatus 
     sendResponseBuffer(
       AsyncWebServerRequest *request, 
-      const String &type, 
+      AsyncBufferType type, 
       uint8_t *data, 
       size_t dataSize
     ) {
       AsyncResponseStream *response = request->beginResponseStream("application/octet-stream");
       response->setCode(200);
-      // TODO: Move type length, and checksum out of headers and into body
-      // response->write(type, sizeof(type));
-      // response->write(checksum, sizeof(checksum));
+      uint8_t typeByte = (uint8_t)type;
+      response->write((uint8_t *)&typeByte, sizeof(typeByte)); // force type to 1 byte
+      uint16_t checksum = ::computeChecksum(data, dataSize);
       response->write(data, dataSize);
-      if (request->hasHeader("X-Type"))
-      { // optional but good for sanity checking in the client.
-        String requestType = request->getHeader("X-Type")->value();
-        if (type != requestType)
-        {
-          request->send(400, "text/plain", "Expected X-Type header to be " + type);
-          return AsyncWebServerBufferStatus::TYPE_HEADER_MISMATCH;
-        }
-      }
-      if (request->hasHeader("X-Checksum"))
-      {
-        String checksum = String(::computeChecksum(data, dataSize));
-        response->addHeader("X-Checksum", checksum);
-      }
-      response->addHeader("X-Type", type);
+      response->write((uint8_t *)&checksum, sizeof(checksum)); // footer 2 bytes checksum
       request->send(response);
       return AsyncWebServerBufferStatus::SUCCESS;
     }
 
-    AsyncWebServerBufferStatus 
+    AsyncWebServerBufferStatus
     processRequestBuffer(
-      AsyncWebServerRequest *request, 
-      uint8_t *requestData, 
-      size_t requestSize, 
-      size_t requestIndex, 
-      size_t requestTotal, 
-      const String &type, 
-      uint8_t *typeData, 
-      size_t typeSize
-    ) {
-      if (!request->hasHeader("X-Type"))
-      {
-        request->send(400, "text/plain", "Missing X-Type header");
-        return AsyncWebServerBufferStatus::TYPE_HEADER_MISSING;
+        AsyncWebServerRequest *request,
+        uint8_t *requestData,
+        size_t requestSize,
+        size_t requestIndex,
+        size_t requestTotal,
+        AsyncBufferType type,
+        uint8_t *typeData,
+        size_t typeSize)
+    {
+      int startOffset = 0;
+      int endOffset = 0;
+      uint16_t requestChecksum = 0;
+      bool isChunked = requestSize != requestTotal;
+
+      if (typeSize != requestTotal - (sizeof(uint8_t) + sizeof(uint16_t)))
+      { // invalid chunk
+        request->send(400, "text/plain", "Invalid binary size");
+        return AsyncWebServerBufferStatus::BUFFER_SIZE_MISMATCH;
       }
-      String requestType = request->getHeader("X-Type")->value();
-      if (type != requestType)
-      {
-        request->send(400, "text/plain", "Expected X-Type header to be " + type);
-        return AsyncWebServerBufferStatus::TYPE_HEADER_MISMATCH;
+
+      if (requestIndex == 0)
+      { // first chunk
+        if(type != (AsyncBufferType) requestData[0]) { // type mismatch
+          request->send(400, "text/plain", "Invalid type");
+          return AsyncWebServerBufferStatus::TYPE_HEADER_MISMATCH;
+        }
+        startOffset = sizeof(uint8_t); // body starts at 1
       }
-      if (requestTotal == typeSize)
-      {
-        if (requestSize + requestIndex < requestTotal)
+
+      if (requestIndex + requestSize == requestTotal)
+      { // last chunk
+        endOffset = sizeof(uint16_t); // footer is 2 bytes
+        requestChecksum = *(uint16_t *)(requestData + requestSize - endOffset);
+        uint16_t computedChecksum = 0;
+        if (isChunked)
         { // large requestData!! size must overwrite the original data :(
-          memcpy(((uint8_t *)typeData) + requestIndex, requestData, requestSize);
-          return AsyncWebServerBufferStatus::PROCESSING_BUFFER_CHUNK; // processing chunks
-        }
-        if (!request->hasHeader("X-Checksum"))
-        {
-          memcpy(((uint8_t *)typeData) + requestIndex, requestData, requestSize);
-          return AsyncWebServerBufferStatus::SUCCESS; // all done!
-        }
-        String requestChecksum = request->getHeader("X-Checksum")->value();
-        String calculatedChecksum;
-        if (requestSize < requestTotal)
-        {
-          // large payloads must finish loading data before checking calculating checksum. :(
-          memcpy(((uint8_t *)typeData) + requestIndex, requestData, requestSize);
-          calculatedChecksum = String(::computeChecksum(typeData, typeSize));
-        }
-        else
-        {
-          calculatedChecksum = String(::computeChecksum(requestData, requestSize));
-        }
-        if (requestChecksum == calculatedChecksum)
-        {
-          if (requestSize == requestTotal)
-          {
-            // small payloads can check the checksum before copying the payload :)
-            memcpy(((uint8_t *)typeData) + requestIndex, requestData, requestSize);
+          memcpy(typeData + requestIndex, requestData + startOffset, requestSize - startOffset - endOffset);
+          if(requestChecksum != 0) {
+            computedChecksum = ::computeChecksum(typeData, typeSize); // check in place
           }
-          return AsyncWebServerBufferStatus::SUCCESS; // all done!!
         }
-        else
+        else if(requestChecksum != 0) {
+          // unchunked
+          computedChecksum = ::computeChecksum(requestData + startOffset, requestSize - startOffset - endOffset); // check before copying
+        }
+        if (_ASYNC_BUFFER_USE_CHECKSUM == true && requestChecksum != computedChecksum)
         {
           request->send(400, "text/plain", "Invalid checksum");
           return AsyncWebServerBufferStatus::CHECKSUM_HEADER_MISMATCH;
         }
+        if (!isChunked)
+        {
+          // 
+          memcpy(typeData + requestIndex, requestData + startOffset, requestSize - startOffset - endOffset);
+        }
+        // ALL DONE!
+        return AsyncWebServerBufferStatus::SUCCESS;
       }
-      request->send(400, "text/plain", "Invalid binary size");
-      return AsyncWebServerBufferStatus::BUFFER_SIZE_MISMATCH;
+
+      // large requestData!! size must overwrite the original data :(
+      memcpy(typeData + requestIndex, requestData + startOffset, requestSize - startOffset - endOffset);
+      return AsyncWebServerBufferStatus::PROCESSING_BUFFER_CHUNK; // processing chunks
     }
 
     std::function<void(AsyncWebServerRequest *)> 
     sendBufferData(
-      const String &type, 
+      AsyncBufferType type, 
       uint8_t *data, 
       size_t size, 
       std::function<bool(AsyncWebServerRequest *)> callback = nullptr
@@ -169,14 +156,14 @@ class AsyncWebServerBuffer : public AsyncWebServer
       };
     }
 
-    std::function<void(AsyncWebServerRequest *, uint8_t *, size_t, size_t, size_t)> 
+    std::function<void(AsyncWebServerRequest *, uint8_t *, size_t, size_t, size_t)>
     receiveBufferData(
-      const String &type, 
-      uint8_t *data, 
-      size_t size, 
-      std::function<bool(AsyncWebServerRequest *)> callback = nullptr, 
-      bool handleResponse = true
-    ) {
+        AsyncBufferType type,
+        uint8_t *data,
+        size_t size,
+        std::function<bool(AsyncWebServerRequest *)> callback = nullptr,
+        bool handleResponse = true)
+    {
       return [this, type, data, size, callback, handleResponse](AsyncWebServerRequest *request, uint8_t *buffer, size_t len, size_t index, size_t total)
       {
         if (processRequestBuffer(request, buffer, len, index, total, type, data, size) == AsyncWebServerBufferStatus::SUCCESS)
@@ -201,34 +188,58 @@ class AsyncWebServerBuffer : public AsyncWebServer
 
     // Creates GET and POST routes to handle sending and updating the provided data at the URI path.
     void onBuffer(
-      const char *uri,
-      const String &type,
-      uint8_t *data,
-      size_t size,
-      std::function<bool(AsyncWebServerRequest *)> getCallback = nullptr,
-      std::function<bool(AsyncWebServerRequest *)> setCallback = nullptr, 
-      bool handleResponse = true
-    ) {
+        const char *uri,
+        AsyncBufferType type,
+        uint8_t *data,
+        size_t size,
+        std::function<bool(AsyncWebServerRequest *)> getCallback = nullptr,
+        std::function<bool(AsyncWebServerRequest *)> setCallback = nullptr,
+        bool handleResponse = true)
+    {
       on(uri, HTTP_GET, sendBufferData(type, data, size, getCallback));
       on(uri, HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, receiveBufferData(type, data, size, setCallback, handleResponse));
+    }
+    void onBuffer(
+        const char *uri,
+        const String &type,
+        uint8_t *data,
+        size_t size,
+        std::function<bool(AsyncWebServerRequest *)> getCallback = nullptr,
+        std::function<bool(AsyncWebServerRequest *)> setCallback = nullptr,
+        bool handleResponse = true)
+    {
+      AsyncBufferType t = getAsyncTypeFromName(type.c_str());
+      onBuffer(uri, t, data, size, getCallback, setCallback, handleResponse);
     }
 
     // Creates a route at the URI path and method to handle the provided data.
     void onBuffer(
-      const char *uri,
-      WebRequestMethod method,
-      const String &type,
-      uint8_t *data,
-      size_t size,
-      std::function<bool(AsyncWebServerRequest *)> callback = nullptr, 
-      bool handleResponse = true
-    ) {
+        const char *uri,
+        WebRequestMethod method,
+        AsyncBufferType type,
+        uint8_t *data,
+        size_t size,
+        std::function<bool(AsyncWebServerRequest *)> callback = nullptr,
+        bool handleResponse = true)
+    {
       if(method == HTTP_GET) {
         on(uri, HTTP_GET, sendBufferData(type, data, size, callback));
       }
       else {
         on(uri, method, [](AsyncWebServerRequest *request) {}, NULL, receiveBufferData(type, data, size, callback, handleResponse));
       }
+    }
+    void onBuffer(
+        const char *uri,
+        WebRequestMethod method,
+        const String &type,
+        uint8_t *data,
+        size_t size,
+        std::function<bool(AsyncWebServerRequest *)> callback = nullptr,
+        bool handleResponse = true)
+    {
+      AsyncBufferType t = getAsyncTypeFromName(type.c_str());
+      onBuffer(uri, method, t, data, size, callback, handleResponse);
     }
 
     void disableCORS() {

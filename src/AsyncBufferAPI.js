@@ -17,8 +17,6 @@
     }, ... ],
 */
 class AsyncBufferAPI {
-  #typeHeader = "X-Type";
-  #checksumHeader = "X-Checksum";
   #idIndex = 0;
   #primitiveTypes = {
     "bool": { s: 1, m: "Uint", p: true },
@@ -48,18 +46,50 @@ class AsyncBufferAPI {
   #_typesByString = new Map();
 
   constructor(config = {}) {
-      this.config = {baseUrl: '/', useChecksum: false, enableDebug: false, ...config};
-      this.addType(this.#primitiveTypes);
-      if(typeof _structs == "object") {
-        this.addType(_structs);
-      }
+    this.config = { baseUrl: '/', useChecksum: false, enableDebug: false, ...config };
+    this.addType(this.#primitiveTypes);
+    if (typeof _structs == "object") {
+      this.addType(_structs);
+    }
   }
 
+  async fetch(method = "GET", url, type = null, data = null, options = {}) {
+    const typeInfo = this.getType(type, false);
+    const _options = { method, headers: {}, ...options };
+    if (method != "GET") {
+      _options.body = this.encode(type, data || 0);
+      _options.bodyDecoded = data;
+      _options.headers["Content-Type"] = "text/plain";
+    }
+    const response = await fetch(`${this.config.baseUrl}${url}`, _options);
+    response.method = method;
+    response.request = { method, url, type, data, options };
+    if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+    let output = null;
+    let responseTypeInfo = typeInfo;
+    if (response.headers.get("Content-Type") === 'application/octet-stream') {
+      const payload = await response.arrayBuffer();
+      output = this.decode(type, payload);
+    }
+    else {
+      output = await response.text();
+    }
+    response.bodyDecoded = output;
+    if (this.config.enableDebug) {
+      console.log(`${_options.method}: ${this.config.baseUrl}${url}`, response);
+    }
+    return [output, response, responseTypeInfo.name];
+  }
+  async get(url, type = null, options = {}) { return await this.fetch('GET', url, type, null, options); };
+  async put(url, type, data = null, options = {}) { return await this.fetch('PUT', url, type, data, options); };
+  async post(url, type, data = null, options = {}) { return await this.fetch('POST', url, type, data, options); };
+  async delete(url, type, data = null, options = {}) { return await this.fetch('DELETE', url, type, data, options); };
+
   addType(type, structDefinition) {
-    if(this.#_types.has(type)) {
+    if (this.#_types.has(type)) {
       throw new Error(`Type already defined '${type}'`);
     }
-    if(typeof type === "object") {
+    if (typeof type === "object") {
       const typesAdded = [];
       Object.keys(type).forEach((key) => {
         typesAdded.push(this.addType(key, type[key]));
@@ -70,7 +100,7 @@ class AsyncBufferAPI {
     if (structDefinition.s) {
       // inflate typeInfo
       const bits = structDefinition.s * 8;
-      newDef = { 
+      newDef = {
         size: structDefinition.s,
         primitive: structDefinition.p
       };
@@ -88,11 +118,11 @@ class AsyncBufferAPI {
   getTypes() {
     return Array.from(this.#_types, ([name, value]) => ({ name, ...value }));
   }
-  
+
   getType(type, error = true) {
-    if(typeof type === "string") {
+    if (typeof type === "string") {
       // lookup type by name
-      if(!this.#_typesByString.has(type)) {
+      if (!this.#_typesByString.has(type)) {
         if (error) {
           throw new Error(`Decoding unknown type string '${type}'`);
         }
@@ -100,7 +130,7 @@ class AsyncBufferAPI {
       }
       type = this.#_typesByString.get(type);
     }
-    if(!this.#_types.has(type)) {
+    if (!this.#_types.has(type)) {
       // lookup type by enum id
       if (error) {
         throw new Error(`Decoding unknown type id '${type}'`);
@@ -110,119 +140,12 @@ class AsyncBufferAPI {
     return this.#_types.get(type);
   }
 
-  async fetch(method = "GET", url, type = null, data = null, options = {}) {
-      const _options = { method, headers: {}, ...options};
-      if(type !== null) {
-        _options.headers[this.#typeHeader] = type;
-      }
-      if (method != "GET") {      
-        _options.body = this.encode(type, data || 0);
-        _options.bodyDecoded = data;
-        _options.headers["Content-Type"] = "text/plain";
-        if (this.config.useChecksum) {
-          _options.headers[this.#checksumHeader] = this.#computeChecksum(new Uint8Array(_options.body)).toString();
-        }
-      }
-      else {
-        if (this.config.useChecksum) {
-          _options.headers[this.#checksumHeader] = "";
-        }
-      }
-      const response = await fetch(`${this.config.baseUrl}${url}`, _options);
-      response.method = method;
-      response.request = { method, url, type, data, options };
-      if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
-      let output = null;
-      if(response.headers.get("Content-Type") === 'application/octet-stream' && response.headers.has(this.#typeHeader)) {
-        const buffer = await response.arrayBuffer();
-        const computedChecksum = this.#computeChecksum(new Uint8Array(buffer)).toString();
-        const responseChecksum = response.headers.get(this.#checksumHeader);
-        if (this.config.useChecksum && responseChecksum != computedChecksum) {
-          // TODO: could automatically retry until success or n number of failed attempts.
-          throw new Error('Checksum failed!');
-        }
-        output = this.decode(response.headers.get(this.#typeHeader), buffer);
-      }
-      else {
-        output = await response.text();
-      }
-      response.bodyDecoded = output;
-      if(this.config.enableDebug) {
-        console.log(`${_options.method}: ${this.config.baseUrl}${url}`, response);
-      }
-      return [output, response, response.headers.get(this.#typeHeader)];
-  }
-  async get(url, type = null, options = {}) { return await this.fetch('GET', url, type, null, options); };
-  async put(url, type, data = null, options = {}) { return await this.fetch('PUT', url, type, data, options); };
-  async post(url, type, data = null, options = {}) { return await this.fetch('POST', url, type, data, options); };
-  async delete(url, type, data = null, options = {}) { return await this.fetch('DELETE', url, type, data, options); };
-
-  // calculateSize struct size
-  #calculateSize(fields = []) {
-    return fields.reduce((size, { type, arraySize }) => {
-      let typeSize = this.getType(type).size || this.#calculateSize(this.getType(type).fields);
-      return size + (arraySize ? typeSize * arraySize : typeSize);
-    }, 0);
-  }
-
-  // encodeClientType
-  #encodeClientType(type, value) {
-    if(value === undefined) {
-      return value;
-    }
-    switch(type) {
-      case "float": 
-        return parseFloat(value.toFixed(6));
-        // return new Float32Array(1)[0] = value;
-      case "bool": 
-        return value ? 1 : 0;
-      case "char": 
-        return value.charCodeAt(0);
-      default: 
-        return value;
-    }
-  };
-  // decodeClientType
-  #decodeClientType(type, value) {
-    if(value === undefined) {
-      return value;
-    }
-    switch(type) {
-      case "float": 
-        return parseFloat(value.toFixed(6));
-      case "bool": 
-        return !!value;
-      case "char": 
-        if(value === 0) {
-          return '';
-        }
-        return String.fromCharCode(value);
-      default: 
-        return value;
-    }
-  };
-
-  // debugArrayBuffer(buffer) {
-  //   const bytes = new Uint8Array(buffer);
-  //   let out = '';
-  //   for(let i = 0; i < bytes.length; i++) {
-  //     if(bytes[i] === 0) {
-  //       out += ' ';
-  //     }
-  //     else {
-  //       out += String.fromCharCode(bytes[i]);
-  //     }
-  //   }
-  //   console.log(out);
-  //   return out;
-  // }
-
   getEmptyType(type) {
     const typeInfo = this.getType(type);
-    if(typeInfo.primitive) {
+    if (typeInfo.primitive) {
       const v = this.#decodeClientType(type, typeInfo.value || 0);
-      if(typeInfo.arraySize) {
-        if(type === 'char') {
+      if (typeInfo.arraySize) {
+        if (type === 'char') {
           v = typeInfo.value || '';
         }
         else {
@@ -233,9 +156,9 @@ class AsyncBufferAPI {
     }
     let fields = typeInfo.fields;
     let obj = {};
-    for(const { type, name, arraySize } of fields) {
+    for (const { type, name, arraySize } of fields) {
       const v = this.getEmptyType(type);
-      if(arraySize && type != 'char') {
+      if (arraySize && type != 'char') {
         obj[name] = Array.from({ length: arraySize }, () => v);
       }
       else {
@@ -246,18 +169,49 @@ class AsyncBufferAPI {
   }
 
   // unpack an ArrayBuffer back into structured data
-  decode(type, buffer) {
+  decode(type, payload) {
+    // payload [ <uint8_t type_id>, <uint8_t body[]>, <uint16_t checksum> ]
     const typeInfo = this.getType(type);
-    if(!typeInfo) {
+    const payloadDataView = new DataView(payload);
+    const responseType = payloadDataView.getUint8(0); // first byte is type
+    const responseTypeInfo = this.getType(responseType);
+    if (type && responseTypeInfo.id != typeInfo.id) {
+      throw new Error(`Decoding type mismatch! Expected '${typeInfo.name}' but got '${responseTypeInfo.name}'`);
+    }
+    const responseChecksum = payloadDataView.getUint16(payload.byteLength - 2, true); // last 2 bytes are checksum
+    const buffer = payload.slice(1, payload.byteLength - 2); // middle is the data
+    if(this.config.useChecksum && responseChecksum != 0) {
+      const computedChecksum = this.#computeChecksum(new Uint8Array(buffer));
+      if ( responseChecksum != computedChecksum) {
+        throw new Error('Checksum failed!');
+      }
+    }
+    return this.#decodeBody(type, buffer);
+  }
+
+  // pack an object back into an ArrayBuffer
+  encode(type, data) {
+    const typeInfo = this.getType(type);
+    const bodyBuffer = this.#encodeBody(type, data);
+    const checksum = this.#computeChecksum(new Uint8Array(bodyBuffer));
+    // payload [ <uint8_t type_id>, <uint8_t body[]>, <uint16_t checksum> ]
+    const payload = new Uint8Array([typeInfo.id, ...new Uint8Array(bodyBuffer), ...new Uint8Array(new Uint16Array([checksum]).buffer)]);
+    return payload.buffer;
+  }
+
+  #decodeBody(type, buffer) {
+    const typeInfo = this.getType(type);
+
+    if (!typeInfo) {
       throw new Error(`Decoding unknown type '${type}'`);
     }
     let fields = [];
-    if(typeInfo.primitive) {
+    if (typeInfo.primitive) {
       // primitive data type
-      fields = [{ type, name: 'value'}];
-      if(buffer.byteLength > typeInfo.size) {
-        if(buffer.byteLength % typeInfo.size !== 0) {
-          throw new Error("Invalid array buffer size for type.", );
+      fields = [{ type, name: 'value' }];
+      if (buffer.byteLength > typeInfo.size) {
+        if (buffer.byteLength % typeInfo.size !== 0) {
+          throw new Error("Invalid array buffer size for type.",);
         }
         fields[0].arraySize = buffer.byteLength / typeInfo.size;
       }
@@ -275,7 +229,7 @@ class AsyncBufferAPI {
         for (let i = 0; i < arraySize; i++) {
           offset = this.#generateDecoding(buffer, view, offset, obj, type, name, true);
         }
-        if(type === 'char') {
+        if (type === 'char') {
           obj[name] = obj[name].join('');
         }
       } else {
@@ -283,7 +237,7 @@ class AsyncBufferAPI {
       }
     });
 
-    if(typeInfo.primitive) {
+    if (typeInfo.primitive) {
       // extract the primitive value.
       return obj.value;
     }
@@ -296,7 +250,7 @@ class AsyncBufferAPI {
     if (typeInfo.primitive) {
       let method = typeInfo.readMethod;
       let value = this.#decodeClientType(type, view[method](offset, true));
-      if(isArray) {
+      if (isArray) {
         obj[varName].push(value);
       }
       else {
@@ -305,8 +259,8 @@ class AsyncBufferAPI {
       offset += typeInfo.size;
     } else {
       let subBuffer = buffer.slice(offset, offset + this.#calculateSize(this.getType(type).fields));
-      const value = this.decode(type, subBuffer);
-      if(isArray) {
+      const value = this.#decodeBody(type, subBuffer);
+      if (isArray) {
         obj[varName].push(value);
       }
       else {
@@ -317,17 +271,16 @@ class AsyncBufferAPI {
     return offset;
   }
 
-  // pack an object back into an ArrayBuffer
-  encode(type, data) {
+  #encodeBody(type, data) {
     let fields = [];
     const typeInfo = this.getType(type);
-    if(typeInfo.primitive) {
+    if (typeInfo.primitive) {
       // primitive data type
-      fields = [{ type, name: 'value'}];
-      if(Array.isArray(data)) {
+      fields = [{ type, name: 'value' }];
+      if (Array.isArray(data)) {
         fields[0].arraySize = data.length;
       }
-      data = {value: data};
+      data = { value: data };
     }
     else {
       //struct data type
@@ -337,8 +290,7 @@ class AsyncBufferAPI {
     let buffer = new ArrayBuffer(this.#calculateSize(fields));
     let view = new DataView(buffer);
     let offset = 0;
-
-    fields.forEach(({ type, name, arraySize }) => {
+    fields.forEach(({ type, name, arraySize }) => { // body
       if (arraySize) {
         for (let i = 0; i < arraySize; i++) {
           offset = this.#generateEncoding(buffer, view, offset, type, data[name][i], true);
@@ -358,19 +310,67 @@ class AsyncBufferAPI {
       view[method](offset, this.#encodeClientType(type, value), true);
       offset += typeInfo.size;
     } else {
-      let subBuffer = this.encode(type, value);
+      let subBuffer = this.#encodeBody(type, value);
       new Uint8Array(buffer).set(new Uint8Array(subBuffer), offset);
       offset += subBuffer.byteLength;
     }
     return offset;
   }
 
+  // encodeClientType
+  #encodeClientType(type, value) {
+    if (value === undefined) {
+      return value;
+    }
+    switch (type) {
+      case "float":
+        return parseFloat(value.toFixed(6));
+      // return new Float32Array(1)[0] = value;
+      case "bool":
+        return value ? 1 : 0;
+      case "char":
+        return value.charCodeAt(0);
+      default:
+        return value;
+    }
+  };
+  // decodeClientType
+  #decodeClientType(type, value) {
+    if (value === undefined) {
+      return value;
+    }
+    switch (type) {
+      case "float":
+        return parseFloat(value.toFixed(6));
+      case "bool":
+        return !!value;
+      case "char":
+        if (value === 0) {
+          return '';
+        }
+        return String.fromCharCode(value);
+      default:
+        return value;
+    }
+  };
+
+  // calculateSize struct size
+  #calculateSize(fields = []) {
+    return fields.reduce((size, { type, arraySize }) => {
+      let typeSize = this.getType(type).size || this.#calculateSize(this.getType(type).fields);
+      return size + (arraySize ? typeSize * arraySize : typeSize);
+    }, 0);
+  }
+
   #computeChecksum(data) {
+    if (this.config.useChecksum === false) {
+      return 0;
+    }
     let sum1 = 0;
     let sum2 = 0;
     for (let byte of data) {
-        sum1 = (sum1 + byte) % 255;
-        sum2 = (sum2 + sum1) % 255;
+      sum1 = (sum1 + byte) % 255;
+      sum2 = (sum2 + sum1) % 255;
     }
     return (sum2 << 8) | sum1;
   }
