@@ -3,5 +3,6 @@ node_modules
 index.min.html
 .vscode
 build
-dist
+examples/*/dist
 package-lock.json
+GenerateSources.json

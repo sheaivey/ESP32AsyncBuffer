@@ -3,6 +3,10 @@ const path = require("path");
 const consoleOut = require("./ConsoleOut.js");
 const { execSync } = require('child_process');
 
+const scriptDir = path.dirname(process.argv[1]);
+const workingDir = process.cwd() || '.';
+const isBuildingLibrary = workingDir == scriptDir;
+
 function requireWithInstall(packageName) {
     try {
         return require(packageName);
@@ -38,18 +42,22 @@ function requireWithInstall(packageName) {
 
 function readDirR(dir) {
   let files;
+  if(!fs.existsSync(dir)) {
+    !isBuildingLibrary && consoleOut.queue(`WARNING: Directory '.${dir.replace(scriptDir, '')}' does not exist!`);
+    return [];
+  }
   try{
     files = fs.statSync(dir).isDirectory()
       ? Array.prototype.concat(...fs.readdirSync(dir).map(f => {
         return readDirR(path.join(dir, f));
-      }))
+      })).filter(f => !['.DS_Store'].includes(path.basename(f))) // filter out hidden files
       : dir;
+      return files;
   }
   catch(error) {
-    consoleOut.queue(`ERROR: Traversing directory "${dir}"`);
-    files = [];
+    !isBuildingLibrary && consoleOut.queue(`ERROR: Traversing directory '.${dir.replace(scriptDir, '') }'`);
   }
-  return files;
+  return [];
 }
 
 function createFile(filePath, content = '') {

@@ -2,11 +2,11 @@
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include "models/Settings.h"
-#include "AsyncWebServerBuffer.h"
-#include "FS.h"
-#include "SPIFFS.h"
 
-#include "dist/_STATIC_HTML_FILES.h"
+// Remember to generate the sources. For details visit the link below.
+// https://github.com/sheaivey/ESP32AsyncBuffer#installation
+#include "dist/_GENERATED_SOURCE.h" // should be included before 'AsyncWebServerBuffer.h'
+#include "AsyncWebServerBuffer.h"
 
 // Wi-Fi credentials
 const char* ssid = "MyWiFi";
@@ -34,8 +34,6 @@ void setup() {
     Serial.println("Connected!");
     Serial.println(WiFi.localIP());
     
-    // generated helper function for serving all the static generated files found in _STATIC_HTML_FILES.h
-    initializeStaticFilesRequests(&server);
     server.onBuffer("/api/Settings", "Settings", (uint8_t *)&settings, sizeof(settings),
       [](AsyncWebServerRequest *request) { // on GET response
         // You can update or modify settings or add headers to the response here before it is sent off.

@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
+#include "AsyncBuffer.h"
 
 enum AsyncWebServerBufferStatus {
   TYPE_HEADER_MISSING = -1,
@@ -18,7 +19,12 @@ enum AsyncWebServerBufferStatus {
 class AsyncWebServerBuffer : public AsyncWebServer
 {
   public:
-    AsyncWebServerBuffer(uint16_t port = 80) : AsyncWebServer(port) {};
+    AsyncWebServerBuffer(uint16_t port = 80) : AsyncWebServer(port) {
+      for(int i = 0; i < staticFilesLength; i++) {
+        AsyncBufferStaticFile *f = &staticFiles[i];
+        onStatic(f->url, f->type, f->body, f->length, f->etag, f->gzip);
+      }
+    };
 
     void onStatic(const char *uri, const char *contentType, const uint8_t *body, size_t len, const char *etag, bool gzip) {
       on(uri, HTTP_GET, [uri, body, len, etag, gzip, contentType](AsyncWebServerRequest *request) {
@@ -39,22 +45,6 @@ class AsyncWebServerBuffer : public AsyncWebServer
       });
     }
 
-    // Function to compute Fletcher16 checksum
-    uint16_t 
-    computeChecksum(
-      const uint8_t *data, 
-      size_t length
-    ) {
-      uint16_t sum1 = 0;
-      uint16_t sum2 = 0;
-      for (size_t i = 0; i < length; i++)
-      {
-        sum1 = (sum1 + data[i]) % 255;
-        sum2 = (sum2 + sum1) % 255;
-      }
-      return (sum2 << 8) | sum1;
-    }
-
     AsyncWebServerBufferStatus 
     sendResponseBuffer(
       AsyncWebServerRequest *request, 
@@ -62,7 +52,12 @@ class AsyncWebServerBuffer : public AsyncWebServer
       uint8_t *data, 
       size_t dataSize
     ) {
-      AsyncWebServerResponse *response = request->beginResponse_P(200, "application/octet-stream", data, dataSize);
+      AsyncResponseStream *response = request->beginResponseStream("application/octet-stream");
+      response->setCode(200);
+      // TODO: Move type length, and checksum out of headers and into body
+      // response->write(type, sizeof(type));
+      // response->write(checksum, sizeof(checksum));
+      response->write(data, dataSize);
       if (request->hasHeader("X-Type"))
       { // optional but good for sanity checking in the client.
         String requestType = request->getHeader("X-Type")->value();
@@ -74,7 +69,7 @@ class AsyncWebServerBuffer : public AsyncWebServer
       }
       if (request->hasHeader("X-Checksum"))
       {
-        String checksum = String(computeChecksum(data, dataSize));
+        String checksum = String(::computeChecksum(data, dataSize));
         response->addHeader("X-Checksum", checksum);
       }
       response->addHeader("X-Type", type);
@@ -122,11 +117,11 @@ class AsyncWebServerBuffer : public AsyncWebServer
         {
           // large payloads must finish loading data before checking calculating checksum. :(
           memcpy(((uint8_t *)typeData) + requestIndex, requestData, requestSize);
-          calculatedChecksum = String(computeChecksum(typeData, typeSize));
+          calculatedChecksum = String(::computeChecksum(typeData, typeSize));
         }
         else
         {
-          calculatedChecksum = String(computeChecksum(requestData, requestSize));
+          calculatedChecksum = String(::computeChecksum(requestData, requestSize));
         }
         if (requestChecksum == calculatedChecksum)
         {

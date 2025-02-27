@@ -1,6 +1,6 @@
-const AsyncWebServerBufferAPI = module.require('../AsyncBufferAPI.js');
+const AsyncBufferAPI = module.require('../AsyncBufferAPI.js');
 const consoleOut = module.require('./ConsoleOut.js');
-const bufferAPI = new AsyncWebServerBufferAPI();
+let bufferAPI;
 
 function removeComments(string) {
   //Takes a string of code, not an actual function.
@@ -48,6 +48,7 @@ const variableRegex = /^\s*([\w\s:*&<>]+?)\s*(\w+)(?:\s*\[\s*(\d*)\s*\])?\s*?(:?
 
 // Parse C++ struct definitions
 function parseStructs(content) {
+  bufferAPI = new AsyncBufferAPI();
   let structs = {};
   let match;
   content = removeComments(content);
@@ -62,7 +63,7 @@ function parseStructs(content) {
     }
   });
 
-  structNames.forEach((key) => {
+  structNames.forEach((key, index) => {
     structName = key;
     body = structsBodies[key];
     let fields = [];
@@ -85,20 +86,29 @@ function parseStructs(content) {
         field.arraySize = arraySize;
       }
       if(field.type.indexOf("*") != -1 || field.type.indexOf("&") != -1) {
-        consoleOut.queue(`WARNING POINTER USAGE: "${structName}::${field.name}" - Pointers can change during runtime and are not guaranteed to be the same between requests or reboots. Not recommended to manipulate data.`);
+        consoleOut.queue(`WARNING: POINTER USAGE '${structName}::*${field.name}'\n  Pointers can change during runtime and are not guaranteed to be the same between \n  requests or reboots. Not recommended to manipulate data.`);
         field.isPointer = true;
         field.type = "uint32_t";
       }
       if (!bufferAPI.getType(field.type, false) && !structsBodies[field.type]) {
-        consoleOut.queue(`ERROR UNKNOWN TYPE: ${field.type} - This will cause unpacking errors.`);
+        consoleOut.queue(`ERROR: UNKNOWN TYPE '${field.type}' in '${structName}::${field.name}'\n  This will cause unpacking errors for '${structName}' struct, \n  check your spelling or try using one of the primitive types.`);
       }
       fields.push(field);
     });
-    structs[structName] = { fields };
+    structs[structName] = { fields }; // struct ids start at 50
     console.log(structName, fields, "\b;\n");
   });
-  
-  return structs;
+  let customTypes = bufferAPI.addType(structs); // add all the parsed structs to the bufferAPI
+  const out = {};
+  customTypes.forEach(it => out[it.name] = it);
+  return out;
 };
 
-module.exports = parseStructs;
+const getAllTypes = () => {
+  return bufferAPI.getTypes();
+}
+
+module.exports = {
+  parseStructs,
+  getAllTypes
+};

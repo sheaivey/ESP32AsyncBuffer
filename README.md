@@ -24,7 +24,7 @@ Instead of JSON, **let the client handle encoding/decoding** while the **ESP32 w
 ✅ **Minimal payload sizes** (binary instead of JSON)  
 ✅ **Checksum support** for integrity verification  
 ✅ **Lightweight client decoder**: `js/models.js` under **1.75 KB**  
-✅ **GZIP support**: Store and serve compressed static files for **faster web responses**  
+✅ **GZIP support**: Store and serve compressed static files for **faster static file responses** 🚀  
 ✅ **Automatic source generation**: Watches `./models` and `./html` for changes  
 
 ---
@@ -42,7 +42,8 @@ git clone https://github.com/your-repo/ESP32AsyncBuffer.git ~/Documents/Arduino/
 
 ### **2️⃣ Include the Library and Set Up a Server**  
 ```cpp
-#include "dist/_STATIC_HTML_FILES.h" // Auto-generated file
+// ./MyProject.ino
+#include "dist/_GENERATED_SOURCE.h" // include Auto-generated before AsyncWebServerBuffer.h
 #include "AsyncWebServerBuffer.h"
 #include "models/MyStruct.h"
 
@@ -52,8 +53,6 @@ int test_int = 0;
 MyStruct myStruct = {0};
 
 void setup() {
-  // Initialize static file routes (auto-generated)
-  initializeStaticFilesRequests(&server);
 
   // Add GET and POST handlers for binary data
   server.onBuffer("/api/int", "int", (uint8_t*)&test_int, sizeof(test_int)); 
@@ -84,7 +83,7 @@ struct MyStruct {
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <script src="/js/models.js"></script> <!-- Auto-generated -->
+    <script src="/js/models.js"></script> <!-- Auto generated static file -->
   </head>
   <body>
     <h1>Hello Buffer</h1>
@@ -134,14 +133,31 @@ The packing script **monitors `./models` and `./html`**, and will automatically 
 
 From the `root of your .ino project` run the `GenerateSources.js` script found in ESP32AsyncBuffer library.
 
-> ⚠️ You will need node `v20.10.0` or better to run the following script.
+> ⚠️ You will need **node** `v20.10.0` or better to run the following script.
+> You may need to give **node** access to modify files on your system.
 
 ```shell
 # From your project root
 node ~/Documents/Arduino/libraries/ESP32AsyncBuffer/GenerateSources.js
 ```
-> If successful, a new file `dist/_STATIC_HTML_FILES.h` will appear in your project.
-> You may need to give node access to modify files on your system.
+> If successful, two new files will appear in your project.
+```shell
+./dist/_GENERATED_SOURCE.h  # All the static source files neatly bundled up 
+./GenerateSource.json  # Ability to change bundling settings.
+```
+> Setting Options for generating sources. Useful for debugging
+```json
+{
+  "modelsDir": "/models", // watch for struct changes here
+  "htmlDir": "/html", // watch for static html files changes here
+  "outputFile": "/dist/_GENERATED_SOURCE.h",
+  "useChecksum": true, // enable checksum on the server
+  "minify": true, // minify the static files in `htmlDir`
+  "inline": false, // in html files inline css,js,img where possible
+  "gzip": true, // store and serve gzip files
+  "outputSources": true // also output the static minified/gzipped files to ./dist
+}
+```
 
 
 ### **Test Your Setup**  

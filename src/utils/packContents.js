@@ -6,8 +6,8 @@ const makeUgly = require("./makeUgly.js");
 const consoleOut = require("./ConsoleOut.js");
 const mime = requireWithInstall('mime-types');
 
-async function packContents(filePath, fileContents, options = {inline: false, gzip: false, minify: false}) {
-  const fileName = path.basename(filePath).replace(/([^A-Za-z0-9]+)/i,"_").toUpperCase();
+async function packContents(filePath, fileContents, options = {inline: false, gzip: false, minify: false, outputSources: false, rootDir: ""}) {
+  const fileName = path.basename(filePath).replace(/([^A-Za-z0-9]+)/ig,"_").toUpperCase();
   if(typeof fileContents == "string") {
     fileContents = Buffer.from(fileContents, "utf-8"); // convert to byteArray
   }
@@ -30,30 +30,37 @@ async function packContents(filePath, fileContents, options = {inline: false, gz
   if(byteBuffer.length >= fileContents.length) {
     savings = "";
   }
-
-  consoleOut.queue(`INFO: "${fileName}" - ${roundTo(byteBuffer.length/1024)}KB ${savings}`);
-
-  const etag = new Date().getTime().toString().slice(-5);
-  let output = `const char FILE_${fileName}_CONTENT_TYPE[] PROGMEM = "${mime.lookup(path.basename(filePath))}";\n`;
-      output+= `const char FILE_${fileName}_ETAG[] PROGMEM = "${etag}";\n`;
-      output+= `const bool FILE_${fileName}_GZIP = ${options.gzip ? "true" : "false"};\n`;
   let hexDataString = "";
   if(byteBuffer.length) {
     hexDataString = `0x${byteBuffer.toString("hex").match(/.{1,2}/g).join(", 0x")}`;
   }
-  output += `const uint8_t FILE_${fileName}[] PROGMEM = { ${hexDataString} };\n`;
+
+  consoleOut.print(`URL: ${(`'${filePath.replace(options.rootDir, '')}'`).padEnd(20,' ')} - ${roundTo(byteBuffer.length/1024).toString().padStart(6, ' ')}KB ${savings}`);
+
+  const etag = new Date().getTime().toString().slice(-5);
+  const urlName = `FILE_${fileName}_URL`;
+  const bodyName= `FILE_${fileName}_BODY`;
+  const etagName= `FILE_${fileName}_ETAG`;
+  const gzipName= `FILE_${fileName}_GZIP`;
+  const contentTypeName= `FILE_${fileName}_CONTENT_TYPE`;
+  const staticFileName = `FILE_${fileName}`;
+
+  let output = `const char ${urlName}[] PROGMEM = "${filePath.replace(options.rootDir, '').replace('index.html', '')}";\n`;
+      output+= `const char ${contentTypeName}[] PROGMEM = "${mime.lookup(path.basename(filePath))}";\n`;
+      output+= `const char ${etagName}[] PROGMEM = "${etag}";\n`;
+      output+= `const bool ${gzipName} = ${options.gzip ? "true" : "false"};\n`;
+      output+= `const uint8_t ${bodyName}[] PROGMEM = { ${hexDataString} };\n`;
+      output+= `const AsyncBufferStaticFile ${staticFileName} = {${urlName}, ${contentTypeName}, ${etagName}, ${bodyName}, sizeof(${bodyName}), ${gzipName}};\n`;
 
   output += "\n";
   return [
     output, 
     { // info
-      path: `${filePath}`,
+      path: filePath,
+      contents: byteBuffer,
       outSize: byteBuffer.length,
       inSize: fileContents.length,
-      bodyName: `FILE_${fileName}`, 
-      etagName: `FILE_${fileName}_ETAG`, 
-      gzipName: `FILE_${fileName}_GZIP`,
-      contentTypeName: `FILE_${fileName}_CONTENT_TYPE`,
+      staticFileName: staticFileName,
     }
   ];
 }

@@ -3,7 +3,7 @@ const fs = require("fs");
 watchingDirectories = [];
 watchTimeout = null;
 eventsQueue = [];
-function watchForChanges(directoryToWatch, callback = (eventType, filename) => {}, options = { recursive: true, throttled: 1000 }) {
+function watchForChanges(directoryToWatch, callback = (eventType, filename) => {}, options = { recursive: true, throttled: 2000 }) {
   if(watchingDirectories.includes(directoryToWatch)) {
     return; // already watching dir
   }

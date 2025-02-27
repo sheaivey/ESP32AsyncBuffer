@@ -44,7 +44,7 @@ async function makeUgly(filePath, byteBuffer, options = {inline: false}) {
     }
   }
   catch(err) {
-    consoleOut.print(`ERROR: makeUgly minify error! \n  Skipping minification step for "${filePath}" \n  ${err}`);
+    consoleOut.print(`WARNING: Could not minify '${filePath}'\n  Skipping minification step \n  ${err}`);
   }
   return byteBuffer;
 };
@@ -84,7 +84,7 @@ async function inlineAssets(basedir = "", html) {
         //   return [match, `<img src="data:image/${imgExt};base64,${base64}" ${imgAttrs}>`];
         // }
       } catch (error) {
-        console.log(`Skipping inlining asset: "${jsPath}"`);
+        consoleOut.log(`WARNING: Skipping inlining asset '${jsPath}'`);
       }
       return [match, match]; // Return original if failed
     })

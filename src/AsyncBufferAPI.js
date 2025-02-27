@@ -1,8 +1,10 @@
 /*  AsyncBufferAPI
     By: Shea Ivey
     Version: 1.0.0_BETA
-    [ key, { s=byte size, m=buffer conversion method, p=primitive } ], // Primitive type format
+    [ key, { i=id, s=byte size, m=buffer conversion method, p=primitive } ], // Primitive type format
     [ key, {  // Struct type format
+      id: 1,
+      name: "structName",
       primitive: false,
       fields: [ 
         { 
@@ -17,68 +19,95 @@
 class AsyncBufferAPI {
   #typeHeader = "X-Type";
   #checksumHeader = "X-Checksum";
-  #_types = new Map([
-    ["bool", { s: 1, m: "Uint", p: true }],
-    ["char", { s: 1, m: "Int", p: true }],
-    ["unsigned char", { s: 1, m: "Uint", p: true }],
-    ["int8_t", { s: 1, m: "Int", p: true }],
-    ["uint8_t", { s: 1, m: "Uint", p: true }],
-    ["short", { s: 2, m: "Int", p: true }],
-    ["unsigned short", { s: 2, m: "Uint", p: true }],
-    ["int16_t", { s: 2, m: "Int", p: true }],
-    ["uint16_t", { s: 2, m: "Uint", p: true }],
-    ["int", { s: 4, m: "Int", p: true }],
-    ["unsigned int", { s: 4, m: "Uint", p: true }],
-    ["long", { s: 4, m: "Int", p: true }],
-    ["unsigned long", { s: 4, m: "Uint", p: true }],
-    ["int32_t", { s: 4, m: "Int", p: true }],
-    ["uint32_t", { s: 4, m: "Uint", p: true }],
-    ["float", { s: 4, m: "Float", p: true }],
-    ["double", { s: 8, m: "Float", p: true }],
-    ["long long", { s: 8, m: "BigInt", p: true }],
-    ["unsigned long long", { s: 8, m: "BigUint", p: true }],
-    ["int64_t", { s: 8, m: "BigInt", p: true }],
-    ["uint64_t", { s: 8, m: "BigUint", p: true }],
-  ]);
+  #idIndex = 0;
+  #primitiveTypes = {
+    "bool": { s: 1, m: "Uint", p: true },
+    "char": { s: 1, m: "Int", p: true },
+    "unsigned char": { s: 1, m: "Uint", p: true },
+    "int8_t": { s: 1, m: "Int", p: true },
+    "uint8_t": { s: 1, m: "Uint", p: true },
+    "short": { s: 2, m: "Int", p: true },
+    "unsigned short": { s: 2, m: "Uint", p: true },
+    "int16_t": { s: 2, m: "Int", p: true },
+    "uint16_t": { s: 2, m: "Uint", p: true },
+    "int": { s: 4, m: "Int", p: true },
+    "unsigned int": { s: 4, m: "Uint", p: true },
+    "long": { s: 4, m: "Int", p: true },
+    "unsigned long": { s: 4, m: "Uint", p: true },
+    "int32_t": { s: 4, m: "Int", p: true },
+    "uint32_t": { s: 4, m: "Uint", p: true },
+    "size_t": { s: 4, m: "Int", p: true },
+    "float": { s: 4, m: "Float", p: true },
+    "double": { s: 8, m: "Float", p: true },
+    "long long": { s: 8, m: "BigInt", p: true },
+    "unsigned long long": { s: 8, m: "BigUint", p: true },
+    "int64_t": { s: 8, m: "BigInt", p: true },
+    "uint64_t": { s: 8, m: "BigUint", p: true },
+  };
+  #_types = new Map();
+  #_typesByString = new Map();
 
-  constructor(config = {baseUrl: '/', useChecksum: false, enableDebug: false}) {
-      this.baseUrl = config.baseUrl || '/';
-      this.useChecksum = config.useChecksum || false;
-      this.enableDebug = config.enableDebug || false;
+  constructor(config = {}) {
+      this.config = {baseUrl: '/', useChecksum: false, enableDebug: false, ...config};
+      this.addType(this.#primitiveTypes);
       if(typeof _structs == "object") {
         this.addType(_structs);
       }
   }
 
   addType(type, structDefinition) {
-    if(typeof type === "object") {
-      Object.keys(type).forEach((key) => {
-        this.#_types.set(key, {primitive: false, name: key, ...type[key]});
-      });
-      return;
+    if(this.#_types.has(type)) {
+      throw new Error(`Type already defined '${type}'`);
     }
-    this.#_types.set(type, {primitive: false, name: type, ...structDefinition});
+    if(typeof type === "object") {
+      const typesAdded = [];
+      Object.keys(type).forEach((key) => {
+        typesAdded.push(this.addType(key, type[key]));
+      });
+      return typesAdded;
+    }
+    let newDef = structDefinition;
+    if (structDefinition.s) {
+      // inflate typeInfo
+      const bits = structDefinition.s * 8;
+      newDef = { 
+        size: structDefinition.s,
+        primitive: structDefinition.p
+      };
+      if (newDef.primitive) {
+        newDef.readMethod = `get${structDefinition.m}${bits}`;
+        newDef.writeMethod = `set${structDefinition.m}${bits}`;
+      }
+    }
+    const info = { id: this.#idIndex++, primitive: false, name: type, ...newDef };
+    this.#_typesByString.set(type, info.id);
+    this.#_types.set(info.id, info);
+    return info;
   }
 
   getTypes() {
-    return this.#_types;
+    return Array.from(this.#_types, ([name, value]) => ({ name, ...value }));
   }
   
   getType(type, error = true) {
-    let typeInfo = this.#_types.get(type);
-    if(!typeInfo) {
+    if(typeof type === "string") {
+      // lookup type by name
+      if(!this.#_typesByString.has(type)) {
+        if (error) {
+          throw new Error(`Decoding unknown type string '${type}'`);
+        }
+        return null;
+      }
+      type = this.#_typesByString.get(type);
+    }
+    if(!this.#_types.has(type)) {
+      // lookup type by enum id
       if (error) {
-        throw new Error(`Decoding unknown type '${type}'`);
+        throw new Error(`Decoding unknown type id '${type}'`);
       }
       return null;
     }
-    if (typeInfo.s) {
-      // inflate typeInfo
-      const bits = typeInfo.s * 8;
-      typeInfo = { size: typeInfo.s, readMethod: `get${typeInfo.m}${bits}`, writeMethod: `set${typeInfo.m}${bits}`, primitive: typeInfo.p };
-      this.#_types.set(type, typeInfo);
-    }
-    return typeInfo;
+    return this.#_types.get(type);
   }
 
   async fetch(method = "GET", url, type = null, data = null, options = {}) {
@@ -90,16 +119,16 @@ class AsyncBufferAPI {
         _options.body = this.encode(type, data || 0);
         _options.bodyDecoded = data;
         _options.headers["Content-Type"] = "text/plain";
-        if (this.useChecksum) {
+        if (this.config.useChecksum) {
           _options.headers[this.#checksumHeader] = this.#computeChecksum(new Uint8Array(_options.body)).toString();
         }
       }
       else {
-        if (this.useChecksum) {
+        if (this.config.useChecksum) {
           _options.headers[this.#checksumHeader] = "";
         }
       }
-      const response = await fetch(`${this.baseUrl}${url}`, _options);
+      const response = await fetch(`${this.config.baseUrl}${url}`, _options);
       response.method = method;
       response.request = { method, url, type, data, options };
       if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
@@ -108,7 +137,7 @@ class AsyncBufferAPI {
         const buffer = await response.arrayBuffer();
         const computedChecksum = this.#computeChecksum(new Uint8Array(buffer)).toString();
         const responseChecksum = response.headers.get(this.#checksumHeader);
-        if (this.useChecksum && responseChecksum != computedChecksum) {
+        if (this.config.useChecksum && responseChecksum != computedChecksum) {
           // TODO: could automatically retry until success or n number of failed attempts.
           throw new Error('Checksum failed!');
         }
@@ -118,8 +147,8 @@ class AsyncBufferAPI {
         output = await response.text();
       }
       response.bodyDecoded = output;
-      if(this.enableDebug) {
-        console.log(`${_options.method}: ${this.baseUrl}${url}`, response);
+      if(this.config.enableDebug) {
+        console.log(`${_options.method}: ${this.config.baseUrl}${url}`, response);
       }
       return [output, response, response.headers.get(this.#typeHeader)];
   }
@@ -191,9 +220,14 @@ class AsyncBufferAPI {
   getEmptyType(type) {
     const typeInfo = this.getType(type);
     if(typeInfo.primitive) {
-      const v = this.#decodeClientType(type, 0);
+      const v = this.#decodeClientType(type, typeInfo.value || 0);
       if(typeInfo.arraySize) {
-        v = Array.from({ length: typeInfo.arraySize }, () => v);
+        if(type === 'char') {
+          v = typeInfo.value || '';
+        }
+        else {
+          v = Array.from({ length: typeInfo.arraySize }, () => v);
+        }
       }
       return v;
     }
@@ -201,11 +235,8 @@ class AsyncBufferAPI {
     let obj = {};
     for(const { type, name, arraySize } of fields) {
       const v = this.getEmptyType(type);
-      if(arraySize) {
+      if(arraySize && type != 'char') {
         obj[name] = Array.from({ length: arraySize }, () => v);
-        if(type === 'char') {
-          obj[name] = obj[name].join('');
-        }
       }
       else {
         obj[name] = v;
