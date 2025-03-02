@@ -37,8 +37,8 @@
     const App = async () => {
       let data, res;
       // get the settings object
-      [data, res, type] = await api.get('/Settings', 'Settings');
-      console.log("GET: /api/Settings", type, data);
+      [data, res, type] = await api.get('/settings', 'Settings');
+      console.log("GET: /api/settings", type, data);
       if(data.version === 1.1) {
         // tweak some Settings
         data.ssid = "newWiFi";
@@ -55,8 +55,8 @@
       }
 
       // post the new Settings struct
-      [data, res, type] = await api.post('/Settings', 'Settings', data);
-      console.log("POST: /api/Settings", type, data);
+      [data, res, type] = await api.post('/settings', 'Settings', data);
+      console.log("POST: /api/settings", type, data);
     };
 
     App(); // start the app!

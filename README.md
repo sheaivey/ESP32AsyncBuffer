@@ -60,7 +60,7 @@ void setup() {
 
   // Add GET and POST handlers for binary data
   server.onBuffer("/api/int", "int", (uint8_t*)&test_int, sizeof(test_int)); 
-  server.onBuffer("/api/MyStruct", "MyStruct", (uint8_t*)&myStruct, sizeof(myStruct)); 
+  server.onBuffer("/api/data", "MyStruct", (uint8_t*)&myStruct, sizeof(myStruct)); 
 
   server.begin();
 }
@@ -108,10 +108,10 @@ struct MyStruct {
         [data, res] = await api.post('/int', 'int', 42);
 
         // Read and modify a struct
-        [data, res] = await api.get('/MyStruct', 'MyStruct');
+        [data, res] = await api.get('/data', 'MyStruct');
         data.name = "Buffy";
         data.value = 42;
-        [data, res] = await api.post('/MyStruct', 'MyStruct', data);
+        [data, res] = await api.post('/data', 'MyStruct', data);
       };
 
       App(); // Run

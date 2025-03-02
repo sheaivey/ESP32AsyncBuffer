@@ -52,81 +52,93 @@ class AsyncWebServerBuffer : public AsyncWebServer
       uint8_t *data, 
       size_t dataSize
     ) {
-      AsyncResponseStream *response = request->beginResponseStream("application/octet-stream");
-      response->setCode(200);
-      uint8_t typeByte = (uint8_t)type;
-      response->write((uint8_t *)&typeByte, sizeof(typeByte)); // force type to 1 byte
-      uint16_t checksum = ::computeChecksum(data, dataSize);
-      response->write(data, dataSize);
-      response->write((uint8_t *)&checksum, sizeof(checksum)); // footer 2 bytes checksum
+      AsyncWebServerResponse *response = request->beginResponse_P(200, "application/octet-stream", data, dataSize);
+      if (request->hasHeader("X-Type"))
+      { // optional but good for sanity checking in the client.
+        String requestType = request->getHeader("X-Type")->value();
+        
+        if (type != getAsyncTypeFromName(requestType.c_str()))
+        {
+          String typeStr = getAsyncTypeName(type);
+          request->send(400, "text/plain", "Expected X-Type header to be " + typeStr);
+          return AsyncWebServerBufferStatus::TYPE_HEADER_MISMATCH;
+        }
+      }
+      if (request->hasHeader("X-Checksum") && _ASYNC_BUFFER_USE_CHECKSUM == true)
+      {
+        String checksum = String(::computeChecksum(data, dataSize));
+        response->addHeader("X-Checksum", checksum);
+      }
+      response->addHeader("X-Type", type);
       request->send(response);
       return AsyncWebServerBufferStatus::SUCCESS;
     }
 
-    AsyncWebServerBufferStatus
+    AsyncWebServerBufferStatus 
     processRequestBuffer(
-        AsyncWebServerRequest *request,
-        uint8_t *requestData,
-        size_t requestSize,
-        size_t requestIndex,
-        size_t requestTotal,
-        AsyncBufferType type,
-        uint8_t *typeData,
-        size_t typeSize)
-    {
-      int startOffset = 0;
-      int endOffset = 0;
-      uint16_t requestChecksum = 0;
-      bool isChunked = requestSize != requestTotal;
-
-      if (typeSize != requestTotal - (sizeof(uint8_t) + sizeof(uint16_t)))
-      { // invalid chunk
-        request->send(400, "text/plain", "Invalid binary size");
-        return AsyncWebServerBufferStatus::BUFFER_SIZE_MISMATCH;
+      AsyncWebServerRequest *request, 
+      uint8_t *requestData, 
+      size_t requestSize, 
+      size_t requestIndex, 
+      size_t requestTotal, 
+      AsyncBufferType type, 
+      uint8_t *typeData, 
+      size_t typeSize
+    ) {
+      if (!request->hasHeader("X-Type"))
+      {
+        request->send(400, "text/plain", "Missing X-Type header");
+        return AsyncWebServerBufferStatus::TYPE_HEADER_MISSING;
       }
-
-      if (requestIndex == 0)
-      { // first chunk
-        if(type != (AsyncBufferType) requestData[0]) { // type mismatch
-          request->send(400, "text/plain", "Invalid type");
-          return AsyncWebServerBufferStatus::TYPE_HEADER_MISMATCH;
-        }
-        startOffset = sizeof(uint8_t); // body starts at 1
+      String requestType = request->getHeader("X-Type")->value();
+      if (type != getAsyncTypeFromName(requestType.c_str()))
+      {
+        String typeStr = getAsyncTypeName(type);
+        request->send(400, "text/plain", "Expected X-Type header to be " + typeStr);
+        return AsyncWebServerBufferStatus::TYPE_HEADER_MISMATCH;
       }
-
-      if (requestIndex + requestSize == requestTotal)
-      { // last chunk
-        endOffset = sizeof(uint16_t); // footer is 2 bytes
-        requestChecksum = *(uint16_t *)(requestData + requestSize - endOffset);
-        uint16_t computedChecksum = 0;
-        if (isChunked)
+      if (requestTotal == typeSize)
+      {
+        if (requestSize + requestIndex < requestTotal)
         { // large requestData!! size must overwrite the original data :(
-          memcpy(typeData + requestIndex, requestData + startOffset, requestSize - startOffset - endOffset);
-          if(requestChecksum != 0) {
-            computedChecksum = ::computeChecksum(typeData, typeSize); // check in place
+          memcpy(((uint8_t *)typeData) + requestIndex, requestData, requestSize);
+          return AsyncWebServerBufferStatus::PROCESSING_BUFFER_CHUNK; // processing chunks
+        }
+        if (!request->hasHeader("X-Checksum") || _ASYNC_BUFFER_USE_CHECKSUM == false)
+        {
+          memcpy(((uint8_t *)typeData) + requestIndex, requestData, requestSize);
+          return AsyncWebServerBufferStatus::SUCCESS; // all done!
+        }
+        String requestChecksumString = request->getHeader("X-Checksum")->value();
+        uint16_t requestChecksum = requestChecksumString.toInt();
+        uint16_t calculatedChecksum;
+        if (requestSize < requestTotal)
+        {
+          // large payloads must finish loading data before checking calculating checksum. :(
+          memcpy(((uint8_t *)typeData) + requestIndex, requestData, requestSize);
+          calculatedChecksum = ::computeChecksum(typeData, typeSize);
+        }
+        else
+        {
+          calculatedChecksum = ::computeChecksum(requestData, requestSize);
+        }
+        if (requestChecksum == calculatedChecksum )
+        {
+          if (requestSize == requestTotal)
+          {
+            // small payloads can check the checksum before copying the payload :)
+            memcpy(((uint8_t *)typeData) + requestIndex, requestData, requestSize);
           }
+          return AsyncWebServerBufferStatus::SUCCESS; // all done!!
         }
-        else if(requestChecksum != 0) {
-          // unchunked
-          computedChecksum = ::computeChecksum(requestData + startOffset, requestSize - startOffset - endOffset); // check before copying
-        }
-        if (_ASYNC_BUFFER_USE_CHECKSUM == true && requestChecksum != computedChecksum)
+        else
         {
           request->send(400, "text/plain", "Invalid checksum");
           return AsyncWebServerBufferStatus::CHECKSUM_HEADER_MISMATCH;
         }
-        if (!isChunked)
-        {
-          // 
-          memcpy(typeData + requestIndex, requestData + startOffset, requestSize - startOffset - endOffset);
-        }
-        // ALL DONE!
-        return AsyncWebServerBufferStatus::SUCCESS;
       }
-
-      // large requestData!! size must overwrite the original data :(
-      memcpy(typeData + requestIndex, requestData + startOffset, requestSize - startOffset - endOffset);
-      return AsyncWebServerBufferStatus::PROCESSING_BUFFER_CHUNK; // processing chunks
+      request->send(400, "text/plain", "Invalid binary size");
+      return AsyncWebServerBufferStatus::BUFFER_SIZE_MISMATCH;
     }
 
     std::function<void(AsyncWebServerRequest *)> 

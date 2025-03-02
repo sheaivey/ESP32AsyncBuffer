@@ -34,18 +34,18 @@ void setup() {
     Serial.println("Connected!");
     Serial.println(WiFi.localIP());
     
-    server.onBuffer("/api/Settings", AsyncBufferType::SETTINGS, (uint8_t *)&settings, sizeof(settings),
-      [](AsyncWebServerRequest *request) { // on GET response
+    server.onBuffer("/api/settings", AsyncBufferType::SETTINGS, (uint8_t *)&settings, sizeof(settings),
+      [](AsyncWebServerRequest *request) { // on GET response ** OPTIONAL **
         // You can update or modify settings or add headers to 
         // the response here before it is sent off to the client.
-        Serial.printf("GET %s OK!\n", request->url());
+        Serial.printf("GET: %s OK!\n", request->url());
         return true; // send the response
       }, 
-      [](AsyncWebServerRequest *request) { // on POST response
-        // settings data has been updated you can do something 
+      [](AsyncWebServerRequest *request) { // on POST response ** OPTIONAL **
+        // settings data have been updated you can do something 
         // here with the modified data before sending the 
         // response back to the client.
-        Serial.printf("POST %s OK!\n", request->url());
+        Serial.printf("POST: %s OK!\n", request->url());
         return true; // send the response
       }
     );

@@ -44,9 +44,10 @@ const loadSettings = () => {
     if (isBuildingLibrary) {
       OUTPUT_FILE = `./dist/_GENERATED_SOURCE.h`;
     }
+    consoleOut.print(`Bundle Settings: gzip ${settings.gzip ? '✅' : '❌'}, minify ${settings.minify ? '✅' : '❌'}, checksum ${settings.useChecksum ? '✅' : '❌'}\n`);
   }
   catch {
-    consoleOut.print("WARNING: could not create local settings file \n  './GenerateSourcesSettings.json' using default settings.");
+    consoleOut.print("WARNING: could not read local settings file \n  './GenerateSourcesSettings.json' using default settings.");
   }
 };
 loadSettings();

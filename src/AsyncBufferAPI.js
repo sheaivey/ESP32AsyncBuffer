@@ -17,6 +17,8 @@
     }, ... ],
 */
 class AsyncBufferAPI {
+  #typeHeader = "X-Type";
+  #checksumHeader = "X-Checksum";
   #idIndex = 0;
   #primitiveTypes = {
     "bool": { s: 1, m: "Uint", p: true },
@@ -53,32 +55,51 @@ class AsyncBufferAPI {
     }
   }
 
+  // Fetch API section
   async fetch(method = "GET", url, type = null, data = null, options = {}) {
-    const typeInfo = this.getType(type, false);
-    const _options = { method, headers: {}, ...options };
-    if (method != "GET") {
-      _options.body = this.encode(type, data || 0);
+    const _options = { method, headers: {}, ...options};
+    if(type !== null) {
+      type = this.getType(type);
+      _options.headers[this.#typeHeader] = type.id;
+    }
+    if (method != "GET") {      
+      _options.body = this.encode(type?.id || null, data || 0);
       _options.bodyDecoded = data;
       _options.headers["Content-Type"] = "text/plain";
+      if (this.config.useChecksum) {
+        _options.headers[this.#checksumHeader] = this.#computeChecksum(new Uint8Array(_options.body)).toString();
+      }
+    }
+    else {
+      if (this.config.useChecksum) {
+        _options.headers[this.#checksumHeader] = "";
+      }
     }
     const response = await fetch(`${this.config.baseUrl}${url}`, _options);
     response.method = method;
-    response.request = { method, url, type, data, options };
+    response.request = { method, url, type: type.name, data, options };
     if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
     let output = null;
-    let responseTypeInfo = typeInfo;
-    if (response.headers.get("Content-Type") === 'application/octet-stream') {
-      const payload = await response.arrayBuffer();
-      output = this.decode(type, payload);
+    if(response.headers.get("Content-Type") === 'application/octet-stream' && response.headers.has(this.#typeHeader)) {
+      const buffer = await response.arrayBuffer();
+      if(response.headers.has(this.#checksumHeader)) {
+        const computedChecksum = this.#computeChecksum(new Uint8Array(buffer)).toString();
+        const responseChecksum = response.headers.get(this.#checksumHeader);
+        if (this.config.useChecksum && responseChecksum != computedChecksum) {
+          throw new Error('Checksum failed!');
+        }
+      }
+      type = this.getType(response.headers.get(this.#typeHeader));
+      output = this.decode(type.id, buffer);
     }
     else {
       output = await response.text();
     }
     response.bodyDecoded = output;
-    if (this.config.enableDebug) {
+    if(this.config.enableDebug) {
       console.log(`${_options.method}: ${this.config.baseUrl}${url}`, response);
     }
-    return [output, response, responseTypeInfo.name];
+    return [output, response, type?.name || null];
   }
   async get(url, type = null, options = {}) { return await this.fetch('GET', url, type, null, options); };
   async put(url, type, data = null, options = {}) { return await this.fetch('PUT', url, type, data, options); };
@@ -122,13 +143,18 @@ class AsyncBufferAPI {
   getType(type, error = true) {
     if (typeof type === "string") {
       // lookup type by name
-      if (!this.#_typesByString.has(type)) {
-        if (error) {
-          throw new Error(`Decoding unknown type string '${type}'`);
-        }
-        return null;
+      if(!isNaN(type)) {
+        type = parseInt(type, 10);
       }
-      type = this.#_typesByString.get(type);
+      else {
+        if (!this.#_typesByString.has(type)) {
+          if (error) {
+            throw new Error(`Decoding unknown type string '${type}'`);
+          }
+          return null;
+        }
+        type = this.#_typesByString.get(type);
+      }
     }
     if (!this.#_types.has(type)) {
       // lookup type by enum id
@@ -143,21 +169,13 @@ class AsyncBufferAPI {
   getEmptyType(type) {
     const typeInfo = this.getType(type);
     if (typeInfo.primitive) {
-      const v = this.#decodeClientType(type, typeInfo.value || 0);
-      if (typeInfo.arraySize) {
-        if (type === 'char') {
-          v = typeInfo.value || '';
-        }
-        else {
-          v = Array.from({ length: typeInfo.arraySize }, () => v);
-        }
-      }
+      const v = this.#decodeClientType(type, 0);
       return v;
     }
     let fields = typeInfo.fields;
     let obj = {};
-    for (const { type, name, arraySize } of fields) {
-      const v = this.getEmptyType(type);
+    for (const { type, name, value, arraySize } of fields) {
+      const v = value !== undefined ? value : this.getEmptyType(type);
       if (arraySize && type != 'char') {
         obj[name] = Array.from({ length: arraySize }, () => v);
       }
@@ -168,38 +186,7 @@ class AsyncBufferAPI {
     return obj;
   }
 
-  // unpack an ArrayBuffer back into structured data
-  decode(type, payload) {
-    // payload [ <uint8_t type_id>, <uint8_t body[]>, <uint16_t checksum> ]
-    const typeInfo = this.getType(type);
-    const payloadDataView = new DataView(payload);
-    const responseType = payloadDataView.getUint8(0); // first byte is type
-    const responseTypeInfo = this.getType(responseType);
-    if (type && responseTypeInfo.id != typeInfo.id) {
-      throw new Error(`Decoding type mismatch! Expected '${typeInfo.name}' but got '${responseTypeInfo.name}'`);
-    }
-    const responseChecksum = payloadDataView.getUint16(payload.byteLength - 2, true); // last 2 bytes are checksum
-    const buffer = payload.slice(1, payload.byteLength - 2); // middle is the data
-    if(this.config.useChecksum && responseChecksum != 0) {
-      const computedChecksum = this.#computeChecksum(new Uint8Array(buffer));
-      if ( responseChecksum != computedChecksum) {
-        throw new Error('Checksum failed!');
-      }
-    }
-    return this.#decodeBody(type, buffer);
-  }
-
-  // pack an object back into an ArrayBuffer
-  encode(type, data) {
-    const typeInfo = this.getType(type);
-    const bodyBuffer = this.#encodeBody(type, data);
-    const checksum = this.#computeChecksum(new Uint8Array(bodyBuffer));
-    // payload [ <uint8_t type_id>, <uint8_t body[]>, <uint16_t checksum> ]
-    const payload = new Uint8Array([typeInfo.id, ...new Uint8Array(bodyBuffer), ...new Uint8Array(new Uint16Array([checksum]).buffer)]);
-    return payload.buffer;
-  }
-
-  #decodeBody(type, buffer) {
+  decode(type, buffer) {
     const typeInfo = this.getType(type);
 
     if (!typeInfo) {
@@ -259,7 +246,7 @@ class AsyncBufferAPI {
       offset += typeInfo.size;
     } else {
       let subBuffer = buffer.slice(offset, offset + this.#calculateSize(this.getType(type).fields));
-      const value = this.#decodeBody(type, subBuffer);
+      const value = this.decode(type, subBuffer);
       if (isArray) {
         obj[varName].push(value);
       }
@@ -271,7 +258,7 @@ class AsyncBufferAPI {
     return offset;
   }
 
-  #encodeBody(type, data) {
+  encode(type, data) {
     let fields = [];
     const typeInfo = this.getType(type);
     if (typeInfo.primitive) {
@@ -310,7 +297,7 @@ class AsyncBufferAPI {
       view[method](offset, this.#encodeClientType(type, value), true);
       offset += typeInfo.size;
     } else {
-      let subBuffer = this.#encodeBody(type, value);
+      let subBuffer = this.encode(type, value);
       new Uint8Array(buffer).set(new Uint8Array(subBuffer), offset);
       offset += subBuffer.byteLength;
     }
@@ -324,8 +311,7 @@ class AsyncBufferAPI {
     }
     switch (type) {
       case "float":
-        return parseFloat(value.toFixed(6));
-      // return new Float32Array(1)[0] = value;
+        return parseFloat(value.toFixed(6)); // round to 32 bit float precision
       case "bool":
         return value ? 1 : 0;
       case "char":
@@ -341,7 +327,7 @@ class AsyncBufferAPI {
     }
     switch (type) {
       case "float":
-        return parseFloat(value.toFixed(6));
+        return parseFloat(value.toFixed(6)); // round to 32 bit float precision
       case "bool":
         return !!value;
       case "char":
@@ -364,7 +350,7 @@ class AsyncBufferAPI {
 
   #computeChecksum(data) {
     if (this.config.useChecksum === false) {
-      return 0;
+      return 0xffff;
     }
     let sum1 = 0;
     let sum2 = 0;
