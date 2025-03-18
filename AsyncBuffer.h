@@ -21,20 +21,26 @@ struct AsyncBufferStaticFile {
 
 #define _ASYNC_BUFFER_NO_CHECKSUM_FLAG 0xFFFF
 
-const char* getAsyncTypeName(AsyncBufferType type) {
+const String getAsyncTypeName(AsyncBufferType type) {
   if(type < 0 || type >= AsyncBufferType::_EOF) {
     return "unknown type";
   }
   return AsyncBufferTypeNames[type];
 }
 
-AsyncBufferType getAsyncTypeFromName(const char* typeName) {
-  if(typeName[0] >= '0' && typeName[0] <= '9') { // is the string a number?
-    return (AsyncBufferType) atoi(typeName);
-  }
-  for (size_t i = AsyncBufferType::_EOF - 1; i >= 0; --i) {
-    if (strcmp(AsyncBufferTypeNames[i], typeName) == 0) {
-      return (AsyncBufferType) i; // Found, return index
+AsyncBufferType getAsyncTypeFromName(String typeName) {
+  if(!typeName.isEmpty()) {
+    if(typeName[0] >= '0' && typeName[0] <= '9') { // is the string a number? lookup by id
+      int id = typeName.toInt();
+      if(id < 0 || id >= AsyncBufferType::_EOF) {
+        AsyncBufferType::UNKNOWN_TYPE;
+      }
+      return (AsyncBufferType) id;
+    }
+    for (size_t i = AsyncBufferType::_EOF - 1; i >= 0; --i) {
+      if (typeName == AsyncBufferTypeNames[i]) {
+        return (AsyncBufferType) i; // Found, return index
+      }
     }
   }
   return AsyncBufferType::UNKNOWN_TYPE;

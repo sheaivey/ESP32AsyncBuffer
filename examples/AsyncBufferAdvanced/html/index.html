@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>  
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#000000"/>
+  <title>AsyncBufferAdvanced</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="icon" type="image/x-icon" href="img/favicon.png">
+  <script src="js/preact.js"></script> <!-- compact UI Framework -->
+  <script src="js/app.js"></script>
+
+  <!-- 
+
+  <base href="http://<ESP32 IP ADDRESS>" />
+
+  Use base tag for local development update the ip to your ESP32  
+  All  relative requests after this point will prepend the base href.
+  You will also need to disable cores on your server for this to work.
+  server.disableCORS(); // useful for local development
+ d
+  -->
+
+  <script src="js/models.js"></script> <!-- GENERATED SCRIPT -->
+
+</head>
+
+<body class="plume">
+  <div id="app"></div>
+  <script>
+    begin(); // start the app! Have a look at "js/app.js"
+  </script>
+</body>
+</html>

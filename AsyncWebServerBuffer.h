@@ -7,7 +7,7 @@
 #include <ESPAsyncWebServer.h>
 #include "AsyncBuffer.h"
 
-enum AsyncWebServerBufferStatus {
+enum class AsyncWebServerBufferStatus {
   TYPE_HEADER_MISSING = -1,
   TYPE_HEADER_MISMATCH = -2,
   CHECKSUM_HEADER_MISMATCH = -3,
@@ -57,7 +57,7 @@ class AsyncWebServerBuffer : public AsyncWebServer
       { // optional but good for sanity checking in the client.
         String requestType = request->getHeader("X-Type")->value();
         
-        if (type != getAsyncTypeFromName(requestType.c_str()))
+        if (type != getAsyncTypeFromName(requestType))
         {
           String typeStr = getAsyncTypeName(type);
           request->send(400, "text/plain", "Expected X-Type header to be " + typeStr);
@@ -91,7 +91,7 @@ class AsyncWebServerBuffer : public AsyncWebServer
         return AsyncWebServerBufferStatus::TYPE_HEADER_MISSING;
       }
       String requestType = request->getHeader("X-Type")->value();
-      if (type != getAsyncTypeFromName(requestType.c_str()))
+      if (type != getAsyncTypeFromName(requestType))
       {
         String typeStr = getAsyncTypeName(type);
         request->send(400, "text/plain", "Expected X-Type header to be " + typeStr);
@@ -220,7 +220,7 @@ class AsyncWebServerBuffer : public AsyncWebServer
         std::function<bool(AsyncWebServerRequest *)> setCallback = nullptr,
         bool handleResponse = true)
     {
-      AsyncBufferType t = getAsyncTypeFromName(type.c_str());
+      AsyncBufferType t = getAsyncTypeFromName(type);
       onBuffer(uri, t, data, size, getCallback, setCallback, handleResponse);
     }
 
@@ -250,7 +250,7 @@ class AsyncWebServerBuffer : public AsyncWebServer
         std::function<bool(AsyncWebServerRequest *)> callback = nullptr,
         bool handleResponse = true)
     {
-      AsyncBufferType t = getAsyncTypeFromName(type.c_str());
+      AsyncBufferType t = getAsyncTypeFromName(type);
       onBuffer(uri, method, t, data, size, callback, handleResponse);
     }
 

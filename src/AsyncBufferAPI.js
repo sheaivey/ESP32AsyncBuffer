@@ -48,7 +48,14 @@ class AsyncBufferAPI {
   #_typesByString = new Map();
 
   constructor(config = {}) {
-    this.config = { baseUrl: '/', useChecksum: false, enableDebug: false, ...config };
+    this.config = { 
+      host: typeof location === "object" ? location.host : '', 
+      baseUrl: '',
+      wsUrl: '/ws', 
+      useChecksum: false, 
+      enableDebug: false, 
+      ...config 
+    };
     this.addType(this.#primitiveTypes);
     if (typeof _structs == "object") {
       this.addType(_structs);
@@ -75,17 +82,20 @@ class AsyncBufferAPI {
         _options.headers[this.#checksumHeader] = "";
       }
     }
+    let output = null;
     const response = await fetch(`${this.config.baseUrl}${url}`, _options);
     response.method = method;
-    response.request = { method, url, type: type.name, data, options };
-    if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
-    let output = null;
+    response.request = { method, url, type: type?.name || null, data, options };
+    if (!response.ok) {
+      output = await response.text();
+      return [output, response, type?.name || null];
+    }
     if(response.headers.get("Content-Type") === 'application/octet-stream' && response.headers.has(this.#typeHeader)) {
       const buffer = await response.arrayBuffer();
       if(response.headers.has(this.#checksumHeader)) {
         const computedChecksum = this.#computeChecksum(new Uint8Array(buffer)).toString();
         const responseChecksum = response.headers.get(this.#checksumHeader);
-        if (this.config.useChecksum && responseChecksum != computedChecksum) {
+        if (this.config.useChecksum && responseChecksum != computedChecksum) {          
           throw new Error('Checksum failed!');
         }
       }
@@ -105,6 +115,93 @@ class AsyncBufferAPI {
   async put(url, type, data = null, options = {}) { return await this.fetch('PUT', url, type, data, options); };
   async post(url, type, data = null, options = {}) { return await this.fetch('POST', url, type, data, options); };
   async delete(url, type, data = null, options = {}) { return await this.fetch('DELETE', url, type, data, options); };
+
+  // // WebSockets API section
+  ws = null;
+  #wsCommand = new Map();
+  // register event listener on path
+  on(command, cb) {
+    this.#wsCommand.set(command, cb);
+  }
+  // send message on path
+  send(command, type = null, data = null, retry = 3) {
+    this.open(); // make sure the connection is open.
+    if(api.ws.readyState !== 1 && retry) {
+      setTimeout(() => this.send(command, type, data, retry-1), 100);
+      return;
+    }
+    const encoder = new TextEncoder();
+    let header = `${command};`; // command
+    let body = new Uint8Array(0);
+    if(type !== null && data !== null) {
+      const typeInfo = this.getType(type);
+      header += `${typeInfo.id};`; // type
+      body = new Uint8Array(this.encode(type, data)); // encoded body
+    }
+    else {
+      header += ';'; // no type or body
+    }
+    header = encoder.encode(header);
+    let buffer = new Uint8Array(header.length + body.length);
+    buffer.set(header, 0);
+    buffer.set(body, header.length);
+    this.ws.send(buffer.buffer);
+  }
+  // close the websocket
+  close() {
+    if(!this.ws || this.ws.readyState === 3) return; // already closed
+    this.ws.close();
+  }
+  // open the websocket
+  open() {
+    if(this.ws && this.ws.readyState != 3) return; // already initialized
+    this.ws = new WebSocket(`ws://${this.config.host}${this.config.wsUrl}`);
+    this.ws.addEventListener("open", (e) => {
+      const cb = this.#wsCommand.get('open');
+      cb && cb(e);
+    });
+    this.ws.addEventListener("error", (e) => {
+      const cb = this.#wsCommand.get('error');
+      cb && cb(e);
+    });
+
+    this.ws.addEventListener("close", (e) => {
+      const cb = this.#wsCommand.get('close');
+      cb && cb(e);
+    });
+    this.ws.addEventListener("message", async (e) => {
+      let command = null, type = null, body = null;
+      if(e.data instanceof Blob) {
+        const arrayBuffer = await e.data.arrayBuffer();          
+        const buffer = new Uint8Array(arrayBuffer);
+        if(buffer.byteLength <= 2){
+          return; // empty command
+        }
+        let hIdx = 0;
+        let header = ["",""];
+        for(let i = 0; i < buffer.byteLength; i++) {
+          let c = String.fromCharCode(buffer[i])
+          if(hIdx == 2) {
+            break; // all done
+          }
+          if(c == ';') {
+            hIdx++;
+            continue; // start next header
+          }
+          header[hIdx] += c;
+        }
+        [command, type] = header;
+        let bodyOffset = command.length + type.length + hIdx;
+        body = buffer.slice(bodyOffset);
+        body = api.decode(type, body.buffer);
+        type = this.getType(type).name;
+      }
+      let cb = this.#wsCommand.get('*');
+      cb && cb(e, command, type, body);
+      cb = this.#wsCommand.get(command);
+      cb && cb(e, command, type, body);
+    });
+  }
 
   addType(type, structDefinition) {
     if (this.#_types.has(type)) {
@@ -155,6 +252,10 @@ class AsyncBufferAPI {
         }
         type = this.#_typesByString.get(type);
       }
+    }
+    if(typeof type === "object" && type.name) {
+      // already a type info object
+      return type;
     }
     if (!this.#_types.has(type)) {
       // lookup type by enum id
@@ -211,12 +312,13 @@ class AsyncBufferAPI {
     let offset = 0;
     let obj = {}; //{ _structure: type };
     fields.forEach(({ type, name, arraySize }) => {
+      const typeInfo = this.getType(type);
       if (arraySize) {
         obj[name] = [];
         for (let i = 0; i < arraySize; i++) {
           offset = this.#generateDecoding(buffer, view, offset, obj, type, name, true);
         }
-        if (type === 'char') {
+        if (typeInfo.name === 'char') { 
           obj[name] = obj[name].join('');
         }
       } else {
@@ -309,7 +411,8 @@ class AsyncBufferAPI {
     if (value === undefined) {
       return value;
     }
-    switch (type) {
+    const typeInfo = this.getType(type);
+    switch (typeInfo.name) {
       case "float":
         return parseFloat(value.toFixed(6)); // round to 32 bit float precision
       case "bool":
@@ -325,7 +428,8 @@ class AsyncBufferAPI {
     if (value === undefined) {
       return value;
     }
-    switch (type) {
+    const typeInfo = this.getType(type);
+    switch (typeInfo.name) {
       case "float":
         return parseFloat(value.toFixed(6)); // round to 32 bit float precision
       case "bool":

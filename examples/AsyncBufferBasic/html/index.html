@@ -29,7 +29,9 @@
   <script>
     // Setup the AsyncBuffer API 
     api = new AsyncBufferAPI({
-      baseUrl: '/api', // prepend all api requests here
+      host: window.location.host,
+      baseUrl: '', // prepend all api requests here
+      wsUrl: '/ws',
       useChecksum: true,
       enableDebug: false // console log the network transactions
     });
@@ -37,7 +39,7 @@
     const App = async () => {
       let data, res;
       // get the settings object
-      [data, res, type] = await api.get('/settings', 'Settings');
+      [data, res, type] = await api.get('/api/settings', 'Settings');
       console.log("GET: /api/settings", type, data);
       if(data.version === 1.1) {
         // tweak some Settings
@@ -55,7 +57,7 @@
       }
 
       // post the new Settings struct
-      [data, res, type] = await api.post('/settings', 'Settings', data);
+      [data, res, type] = await api.post('/api/settings', 'Settings', data);
       console.log("POST: /api/settings", type, data);
     };
 
