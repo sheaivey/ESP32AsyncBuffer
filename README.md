@@ -25,7 +25,9 @@ With all the features and bonus features building embedded single page apps has 
 ✅ **Uses minimal dynamic memory**: (`memcpy()` directly into variables)  
 ✅ **Handles very large datasets**: efficiently  
 ✅ **Checksum support**: for integrity verification  
-✅ **Lightweight client decoder**: `js/models.js`
+✅ **Lightweight client decoder**: `js/models.js`  
+✅ **HTTP**: async HTTP handlers `server.onBuffer(...)`  
+✅ **WebSocket**: async WebSocket handlers `ws.onBuffer(...)`  
 ### Bonus Features!! 😻  
 ✅ **Automatic source generation**: Watches `./models` and `./html` for changes  
 ✅ **GZIP support**: Store and serve compressed static files for **faster static file responses** 🚀  
@@ -35,7 +37,9 @@ With all the features and bonus features building embedded single page apps has 
 
 ## **Installation**  
 
-> ⚠️ This is a simplified setup. Check `./examples/AsyncBufferBasic` for a complete example.  
+> ⚠️ This is a simplified setup. Checkout the following examples for a complete usage.
+[examples/AsyncBufferBasic](examples/AsyncBufferBasic)
+[examples/AsyncBufferAdvanced](examples/AsyncBufferAdvanced)
 
 ### **1️⃣ Install the Library**  
 Clone or copy this repository into your Arduino libraries folder:  
@@ -229,8 +233,8 @@ Serial.printf("r: %d, g: %d, b: %d\n", c->r, c->g, c->b); // r: 255, g: 0, b: 0
 - **WebSockets Support** (`AsyncWebSocketBuffer`)  
 - **ESP-NOW Support** (`AsyncESPNowBuffer`)  
 - **More examples and integrations** 
+  - Remove checksum as it is not necessary for HTTP, WS, ESPNow as far as I can tell it is already on all 802.11 message frames.
   - Captive portal and wifi setup.
-  - Websocket data streaming
   - ESP Now data streaming
 
 ---
