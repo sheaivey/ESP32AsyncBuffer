@@ -4,8 +4,8 @@
 #include "models/Settings.h"
 
 // Remember to generate the sources. For details visit the link below.
-// https://github.com/sheaivey/ESP32AsyncBuffer#how-does-it-work
-#include "dist/_GENERATED_SOURCE.h"
+// https://github.com/sheaivey/ESP32AsyncBuffer#installation
+#include "dist/_GENERATED_SOURCE.h" // should be included before 'AsyncWebServerBuffer.h'
 #include "AsyncWebServerBuffer.h"
 #include "AsyncWebSocketBuffer.h"
 

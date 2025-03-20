@@ -38,8 +38,9 @@ With all the features and bonus features building embedded single page apps has 
 ## **Installation**  
 
 > ⚠️ This is a simplified setup. Checkout the following examples for a complete usage.
-[examples/AsyncBufferBasic](examples/AsyncBufferBasic)
-[examples/AsyncBufferAdvanced](examples/AsyncBufferAdvanced)
+
+* [examples/AsyncBufferBasic](examples/AsyncBufferBasic)
+* [examples/AsyncBufferAdvanced](examples/AsyncBufferAdvanced)
 
 ### **1️⃣ Install the Library**  
 Clone or copy this repository into your Arduino libraries folder:  

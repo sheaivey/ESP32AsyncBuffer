@@ -2,7 +2,7 @@
 
 This example shows an advanced single page app using ESP32AsyncBuffer and
 demonstrating a simple API Explorer with websocket commands and data streams.
-It is also shows use of large css file and using a javascript framework like PreactJS.
+It is also shows use of large `css` file and using a javascript framework like `PreactJS`.
 
 ## Generate Sources
 You will first need to run the node script to generate the static HTML files.
