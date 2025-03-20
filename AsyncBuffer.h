@@ -33,7 +33,7 @@ AsyncBufferType getAsyncTypeFromName(String typeName) {
     if(typeName[0] >= '0' && typeName[0] <= '9') { // is the string a number? lookup by id
       int id = typeName.toInt();
       if(id < 0 || id >= AsyncBufferType::_EOF) {
-        AsyncBufferType::UNKNOWN_TYPE;
+        id = AsyncBufferType::UNKNOWN_TYPE;
       }
       return (AsyncBufferType) id;
     }

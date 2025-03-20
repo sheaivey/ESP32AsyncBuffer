@@ -101,14 +101,15 @@ void setup() {
     return true; // send response?
   });
   ws.onBuffer("fps", AsyncBufferType::UINT8_T, [](AsyncWebSocketClientBuffer *client, String command, AsyncBufferType type, uint8_t *data, size_t len, AsyncWebSocketBufferStatus status) {
-    Serial.printf("%s fps\n", status == AsyncWebSocketBufferStatus::SET ? "SET" : "GET");
+    // validate fps value before setting
     if(status == AsyncWebSocketBufferStatus::SET) {
       uint8_t value = data[0];
       if(value > 0) {
         fps = value;
       }
-      nextFrame = millis() + (1000.0/(float)fps);
-    }
+      nextFrame = 0; // trigger next frame 
+    }   
+    Serial.printf("%s fps %d\n", status == AsyncWebSocketBufferStatus::SET ? "SET" : "GET", fps);
     return true; // send response?
   });
   ws.onBuffer("close", AsyncBufferType::SETTINGS, (uint8_t *)&settings, sizeof(settings), [](AsyncWebSocketClientBuffer *client, String command, AsyncBufferType type, uint8_t *data, size_t len, AsyncWebSocketBufferStatus status) {
@@ -128,12 +129,12 @@ void setup() {
       value = data[0];
       if(value > 0) {
         fps = value;
-        if(_streamClientId != 0) {
+        if(_streamClientId != 0 && _streamClientId != client->id()) {
           // stopping the previous stream
           Serial.printf("Client #%d: stop stream\n", _streamClientId);
         }
         _streamClientId = client->id();
-        nextFrame = millis() + (1000.0/(float)fps);
+        nextFrame = 0; // trigger next frame 
         Serial.printf("Client #%d: start stream @ %dfps\n", client->id(), fps);
       }
       else {
@@ -151,13 +152,15 @@ void setup() {
 
 
 StreamData data;
+unsigned long lastFrameTime = 0;
 void loop() {
   ws.cleanupClients(); // cleanup any disconnected clients
-  if(millis() < nextFrame) {
+  unsigned long now = micros();
+  if(now < nextFrame) {
     return; // not time yet
   }
   frame++;
-  nextFrame = millis() + (1000.0/(float)fps);
+  nextFrame = now + (1000000.0F / (float)(fps));
   
   if(_streamClientId) {
     // You could provide a list of client IDs that have requested the data stream
@@ -167,15 +170,13 @@ void loop() {
     AsyncWebSocketClientBuffer *c = ws.client(_streamClientId);
     if(c != nullptr && c->status() == AwsClientStatus::WS_CONNECTED) {
       // stream data to client who asked for it.
-      data.frame = frame;
-      data.clients = ws.count();
-      data.heapSize = ESP.getHeapSize();
-      data.freeHeapSize = ESP.getFreeHeap();
-      data.temp = temperatureRead();
       data.id = c->id();
-      data.fps = 1000.0/(float)(millis()-data.time);
+      data.clients = ws.count();
+      data.frame = frame;
+      data.fps = 1000000.0F / (float)( now - lastFrameTime );
       data.time = millis();
       ws.sendBuffer(_streamClientId, "data", AsyncBufferType::STREAMDATA, (uint8_t *)&data, sizeof(data));
     }
   }
+  lastFrameTime = now;
 }

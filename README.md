@@ -229,7 +229,7 @@ Serial.printf("r: %d, g: %d, b: %d\n", c->r, c->g, c->b); // r: 255, g: 0, b: 0
 - **WebSockets Support** (`AsyncWebSocketBuffer`)  
 - **ESP-NOW Support** (`AsyncESPNowBuffer`)  
 - **More examples and integrations** 
-  - Boilerplate app using Preact with captive portal and wifi setup.
+  - Captive portal and wifi setup.
   - Websocket data streaming
   - ESP Now data streaming
 

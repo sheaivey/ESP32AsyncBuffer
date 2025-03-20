@@ -133,8 +133,9 @@ class AsyncBufferAPI {
     const encoder = new TextEncoder();
     let header = `${command};`; // command
     let body = new Uint8Array(0);
+    let typeInfo = null;
     if(type !== null && data !== null) {
-      const typeInfo = this.getType(type);
+      typeInfo = this.getType(type);
       header += `${typeInfo.id};`; // type
       body = new Uint8Array(this.encode(type, data)); // encoded body
     }
@@ -146,11 +147,15 @@ class AsyncBufferAPI {
     buffer.set(header, 0);
     buffer.set(body, header.length);
     this.ws.send(buffer.buffer);
+    if(this.config.enableDebug) {
+      console.log(`ws send: ${command} ${typeInfo ? `<${typeInfo.name}>` : ""}`, data);
+    }
   }
   // close the websocket
   close() {
     if(!this.ws || this.ws.readyState === 3) return; // already closed
     this.ws.close();
+    this.ws = null;
   }
   // open the websocket
   open() {
@@ -159,15 +164,25 @@ class AsyncBufferAPI {
     this.ws.addEventListener("open", (e) => {
       const cb = this.#wsCommand.get('open');
       cb && cb(e);
+      if(this.config.enableDebug) {
+        console.log(`ws opened:`, e);
+      }
     });
     this.ws.addEventListener("error", (e) => {
       const cb = this.#wsCommand.get('error');
       cb && cb(e);
+      if(this.config.enableDebug) {
+        console.log(`ws error:`, e);
+      }
     });
 
     this.ws.addEventListener("close", (e) => {
       const cb = this.#wsCommand.get('close');
       cb && cb(e);
+      if(this.config.enableDebug) {
+        console.log(`ws closed:`, e);
+      }
+      this.ws = null;
     });
     this.ws.addEventListener("message", async (e) => {
       let command = null, type = null, body = null;
@@ -200,6 +215,9 @@ class AsyncBufferAPI {
       cb && cb(e, command, type, body);
       cb = this.#wsCommand.get(command);
       cb && cb(e, command, type, body);
+      if(this.config.enableDebug) {
+        console.log(`ws receive: ${command} <${type}>`, body);
+      }
     });
   }
 

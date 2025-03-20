@@ -70,9 +70,6 @@ struct StreamData {
   int frame = 0;
   float fps = 0;
   unsigned long time = 0;
-  uint32_t heapSize = 0;
-  uint32_t freeHeapSize = 0;
-  float temp = 0;
 };
 
 #endif

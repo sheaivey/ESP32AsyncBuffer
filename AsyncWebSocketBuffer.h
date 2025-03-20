@@ -188,7 +188,10 @@ class AsyncWebSocketBuffer : public AsyncWebSocket
 
         for (auto it = _commands.begin(); it != _commands.end(); ++it) {
           AsyncWebSocketBufferCommand *c = it->get();
-          if (c->command == _request.command) {
+          if (
+            c->command == _request.command // command matches
+            || c->command == "*" // any command matches
+          ) {
             AsyncWebSocketBufferStatus status = AsyncWebSocketBufferStatus::GET;
             // Found the command 
             if(c->type != AsyncBufferType::UNKNOWN_TYPE) {
@@ -207,7 +210,8 @@ class AsyncWebSocketBuffer : public AsyncWebSocket
                 else if (c->length != 0 && _request.length != 0) {
                   // has invalid data
                   if(isLast) {
-                    Serial.printf("Invalid buffer size, expected %d but received %d\n", c->length, _request.length);
+                    String msg = "Invalid buffer size, expected " + String(c->length) + " but received " + _request.length;
+                    client->sendBuffer("error", AsyncBufferType::CHAR, (uint8_t *)msg.c_str(), msg.length());
                   }
                   status = AsyncWebSocketBufferStatus::BUFFER_SIZE_MISMATCH;
                 }
@@ -219,7 +223,8 @@ class AsyncWebSocketBuffer : public AsyncWebSocket
               else if(_request.length != 0) {
                 // data was sent but type is invalid
                 if(isLast) {
-                  Serial.printf("Invalid type, expected %s but received %s\n", getAsyncTypeName(c->type), _request.typeName);
+                  String msg = "Invalid type, expected " + getAsyncTypeName(c->type) + " but received " + _request.typeName;
+                  client->sendBuffer("error", AsyncBufferType::CHAR, (uint8_t *)msg.c_str(), msg.length());
                 }
                 status = AsyncWebSocketBufferStatus::TYPE_HEADER_MISMATCH;
               }

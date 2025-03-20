@@ -20,6 +20,16 @@ const begin = () => {
 }
 
 
+const useStateRef = (defaultValue) => {
+  const ref = useRef();
+  const [value, setValue] = useState(defaultValue);
+  ref.current = value;
+  return [ref, (...args) => { 
+    setValue(...args);
+    return ref.current;
+  }];
+}
+
 const App = () => {
   const [tab, setTab] = useState('HTTP');
   const handleTab = (e) => {
@@ -31,19 +41,21 @@ const App = () => {
     "WebSocket Stream": WSStreamExplorer
   };
   return html`
-    <div style="padding: 24px;">
-      <h1>
-        <img src="img/favicon.png"/>${" "}
-        API Explorer!
-      </h1>
-      <p>
-        Use the form below to make request against the ESP32 AsyncBuffer API.
-      </p>
-      <select onChange=${handleTab} value=${tab}>
-        ${Object.keys(views).map((v) => {
-          return html`<option key=${v} value=${v} selected=${v == tab}>${v}</option>`;
-        })}
-      </select>
+    <div style="margin-top: 24px;">
+      <header class="container">
+        <h1>
+          <img src="img/favicon.png"/>${" "}
+          API Explorer!
+        </h1>
+        <p>
+          Use the form below to make request against the ESP32 AsyncBuffer API.
+        </p>
+        <select onChange=${handleTab} value=${tab}>
+          ${Object.keys(views).map((v) => {
+            return html`<option key=${v} value=${v} selected=${v == tab}>${v}</option>`;
+          })}
+        </select>
+      </header>
       <${views[tab]} />
     </div>
   `;
@@ -62,7 +74,7 @@ const HTTPExplorer = () => {
     let res;
     let start = new Date().getTime();
     try{
-      res = await api.fetch(method, url, type, data);
+      res = await api.fetch(method, url, method === "POST" ? type : null, data);
     }
     catch(e) {
       setIsLoading(false);
@@ -104,20 +116,33 @@ const HTTPExplorer = () => {
     handleRequest();
   }, []);
   return html`
-  <div>
-    <select onChange=${handleMethod} value=${method}>
-      ${["GET", "POST"].map((v) => {
-        return html`<option key=${v} value=${v} selected=${v == method}>${v}</option>`;
-      })}
-    </select>
-    <input onInput=${handleUrl} value=${url} />
-    ${method !== 'GET' && html`
-      <select onChange=${handleType} value=${type}>
-        ${api.getTypes().map((t) => {
-          return html`<option key=${t.name} value=${t.name} selected=${t.name == type}>${t.name}</option>`;
+  <div class="container">
+    <label>
+      Method
+      <select onChange=${handleMethod} value=${method}>
+        ${["GET", "POST"].map((v) => {
+          return html`<option key=${v} value=${v} selected=${v == method}>${v}</option>`;
         })}
       </select>
-      <textarea onInput=${handleData} value=${JSON.stringify(data, null, 2)}></textarea>
+    </label>
+
+    <label>
+      URL
+      <input onInput=${handleUrl} value=${url} />
+    </label>
+    ${method !== 'GET' && html`
+      <label>
+        Data Type
+        <select onChange=${handleType} value=${type}>
+          ${api.getTypes().map((t) => {
+            return html`<option key=${t.name} value=${t.name} selected=${t.name == type}>${t.name}</option>`;
+          })}
+        </select>
+      </label>
+      <label>
+        Data
+        <textarea onInput=${handleData} aria-invalid=${!!invalidData}>${JSON.stringify(data, null, 2)}</textarea>
+      </label>
       <div style="color: red;">${invalidData}</div>
     `}
     <button disabled=${isLoading} onClick=${handleRequest}>Send</button>
@@ -140,12 +165,14 @@ const HTTPExplorer = () => {
   `;
 };
 
+let autoConnect = true;
 const WSExplorer = () => {
   const [type, setType] = useState(null);
   const [data, setData] = useState(null);
   const [messages, setMessages] = useState([]);
   const [command, setCommand] = useState('settings');
   const [invalidData, setInvalidData] = useState(false);
+  const [open, setOpen] = useState(!!api.ws);
   const handleType = (e) => {
     if(e.target.value) {
       setData(api.getEmptyType(e.target.value));
@@ -168,6 +195,9 @@ const WSExplorer = () => {
   const handleCommand = (e) => {
     setCommand(e.target.value);
   };
+  const handleAutoConnect = (e) => {
+    autoConnect = e.target.checked;
+  }
 
   const handleRequest = () => {
     setMessages((messages) => [ { e: {timeStamp: performance.now()}, command, type, data: JSON.stringify(data, null, 2), direction: 'send' }, ...messages ] );
@@ -182,34 +212,59 @@ const WSExplorer = () => {
             setType(type);
           }
           if(data) {
+            setInvalidData(false);
             setData(data);
           }
         }
         return c;
       });
-      
       setMessages((messages) => [ { e, command, type, data: JSON.stringify(data, null, 2), direction: 'receive' }, ...messages ] ) 
     });
-    api.on('open', (e) => { setMessages((messages) => [ { e, command: 'open', type: null, data: null, direction: 'event' }, ...messages ] ) });
-    api.on('close', (e) => { setMessages((messages) => [ { e, command: 'close', type: null, data: null, direction: 'event' }, ...messages ] ) });
+    api.on('open', (e) => { 
+      setOpen(true);
+      setMessages((messages) => [ { e, command: 'open', type: null, data: null, direction: 'event' }, ...messages ] ) 
+    });
+    api.on('close', (e) => { 
+      setOpen(false);
+      if(autoConnect){
+        setTimeout(() => api.open(), 100); // attempt to reconnect
+      }
+      setMessages((messages) => [ { e, command: 'close', type: null, data: null, direction: 'event' }, ...messages ] );
+    });
     api.on('error', (e) => { setMessages((messages) => [ { e, command: 'error', type: null, data: null, direction: 'event' }, ...messages ] ) });
-    api.open();
+    if(autoConnect){
+      api.open();
+    }
     return () => {
       api.close();
     }
   }, []);
   return html`
-  <div>
-    <input onInput=${handleCommand} value=${command} />
-    <select onChange=${handleType} value=${type} placeholder="Command">
-      <option value=${null} selected=${null == type}> </option>
-      ${api.getTypes().map((t) => {
-        return html`<option key=${t.name} value=${t.name} selected=${t.name == type}>${t.name}</option>`;
-      })}
-    </select>
-    ${type !== null ? html`<textarea onInput=${handleData} value=${JSON.stringify(data, null, 2)}></textarea>` : ''}
+  <div class="container">
+    <label>
+      Command
+      <input onInput=${handleCommand} value=${command} placeholder="Command" />
+    </label>
+    <label>
+      Data Type
+      <select onChange=${handleType} value=${type} placeholder="Data Type">
+        <option value=${null} selected=${null == type}> </option>
+        ${api.getTypes().map((t) => {
+          return html`<option key=${t.name} value=${t.name} selected=${t.name == type}>${t.name}</option>`;
+        })}
+      </select>
+    </label>
+    ${type !== null ? html`<label>Data<textarea placeholder="Data" onInput=${handleData} aria-invalid=${!!invalidData}>${JSON.stringify(data, null, 2)}</textarea></label>` : ''}
     <div style="color: red;">${invalidData}</div>
-    <button onClick=${handleRequest}>Send</button>
+    <div class="grid">
+    <div>
+      <button onClick=${handleRequest}>Send</button>
+    </div>
+    <div style="text-align: right">
+      <input type="checkbox" onInput=${handleAutoConnect} checked=${autoConnect} title="Auto Reconnect" role="switch" />
+      <b style="color: ${open ? "rgba(0,255,0)" : "rgba(255,0,0)"}">${open ? "Connected" : "Disconnected"}</b>
+    </div>
+  </div>
     <br/><br/>
     <code style="white-space: pre;width: 100%;margin-bottom: 24px">
     ${messages.map(({e, command, type, data, direction}, index ) => {
@@ -240,34 +295,78 @@ const WSExplorer = () => {
 
 const WSStreamExplorer = () => {
   const [data, setData] = useState({});
-  const [fps, setFps] = useState(1);
-  api.on('data', async (e, command, type, data) => {
-    setData((d) => ({ e, command, type, data: JSON.stringify(data, null, 2), direction: 'receive' }) ) 
-  });
+  const [fpsRef, setFps] = useStateRef(1);
+  const [err, setErr] = useState(false);
+  const [disconnectCount, setDisconnectCount] = useState(0);
+  const [open, setOpen] = useState(!!api.ws);
   const handleFps = (e) => {
     const v = parseInt(e.target.value, 10);
     api.send("fps", "uint8_t", v);
     setFps(v);
   };
   const handleStart = () => {
-    api.send("stream", "uint8_t", fps);
+    api.send("stream", "uint8_t", fpsRef.current);
   }
   const handleStop = () => {
     api.send("stream", "uint8_t", 0);
+  }  
+  const handleClose = () => {
+    api.send("close");
+  }
+  const handleAutoConnect = (e) => {
+    autoConnect = e.target.checked;
   }
 
   useEffect(() => {
-    api.open();
+    api.on('data', async (e, command, type, data) => {
+      setData((d) => ({ e, command, type, data: JSON.stringify(data, null, 2), direction: 'receive' }) ) 
+    });
+    api.on('close', async (e, command, type, data) => {
+      setDisconnectCount((v) => ++v);
+      setOpen(false);
+      if(autoConnect){
+        setTimeout(() => {
+          api.send("stream", "uint8_t", fpsRef.current); // restart the stream
+        }, 100); // try to reconnect
+      }
+    });
+    api.on('open', async (e, command, type, data) => {
+      setOpen(true);
+    });
+    api.on('error', async (e, command, type, data) => {
+      setErr(JSON.stringify(data, null, 2));
+    });
+    if(autoConnect){
+      api.open();
+    }
     return () => {
       api.close();
     }
   },[]);
   return html`
-  <input type="range" min="1" max="120" step="1" onInput=${handleFps} value=${fps} />
-  <button onClick=${handleStart}>Start</button>${" "}
-  <button onClick=${handleStop}>Stop</button><br/><br/>
-  <code style="white-space: pre;width: 100%;margin-bottom: 24px">
-    ${data.type}<br />
-    ${data.data}
-  </code>`;
+  <div class="container">
+    <label>
+      FPS <div style="float: right">${fpsRef.current}</div>
+      <input type="range" min="1" max="127" step="1" onInput=${handleFps} defaultValue=${fpsRef.current} />
+    </label>
+    <div class="grid">
+      <div role="group">
+        <button onClick=${handleStart} class="primary">Start</button>
+        <button onClick=${handleStop} class="secondary">Stop</button>
+        <button onClick=${handleClose} class="secondary">Close</button>
+      </div>
+      <div style="text-align: right">
+        <input type="checkbox" onInput=${handleAutoConnect} checked=${autoConnect} title="Auto Reconnect" role="switch" />
+        <b style="color: ${open ? "rgba(0,255,0)" : "rgba(255,0,0)"}">${open ? "Connected" : "Disconnected"}</b>
+      </div>
+    </div>
+    <b style="color: rgba(255,0,0)">${err}</b>
+    <br/>
+    <br/>
+    <code style="white-space: pre;width: 100%;margin-bottom: 24px">
+      ${data.type}<br />
+      ${data.data}
+    </code>
+    Disconnects: ${disconnectCount}
+  </div>`;
 }
